@@ -1,14 +1,74 @@
 // File: src/controllers/prescription.controller.js
+const os = require('os');
 const QRCode = require('qrcode');
 const Prescription = require('../models/Prescription.model');
 const Medication = require('../models/Medication.model');
 const QrScanLog = require('../models/QrScanLog.model');
 
 /**
+ * Tự động lấy địa chỉ IPv4 mạng LAN/Wi-Fi của máy chủ
+ * (Tránh lỗi mã QR chứa "localhost" khiến điện thoại quét không truy cập được)
+ */
+const getServerLanIp = () => {
+  const nets = os.networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return '127.0.0.1';
+};
+
+/**
+ * Xác định URL gốc để nhúng vào mã QR cho điện thoại quét (Ưu tiên Public HTTPS 4G/5G Tunnel)
+ */
+const resolveBaseQrUrl = (req) => {
+  if (req && req.query && req.query.base_url) {
+    return req.query.base_url.trim().replace(/\/+$/, '');
+  }
+
+  // 1. Ưu tiên cao nhất: Đường hầm Public HTTPS (Quét bằng 4G/5G từ bất kỳ đâu)
+  if (global.PUBLIC_QR_BASE_URL) {
+    return global.PUBLIC_QR_BASE_URL.replace(/\/+$/, '');
+  }
+
+  // 2. Nếu cấu hình tên miền Public cố định trong .env (không phải localhost / LAN IP)
+  const envUrl = (process.env.BASE_QR_URL || '').trim().replace(/\/+$/, '');
+  if (
+    envUrl &&
+    !envUrl.includes('localhost') &&
+    !envUrl.includes('127.0.0.1') &&
+    !envUrl.startsWith('http://10.') &&
+    !envUrl.startsWith('http://192.168.')
+  ) {
+    return envUrl;
+  }
+
+  // 3. Nếu truy cập qua tên miền hoặc IP mạng LAN trên trình duyệt
+  if (req && req.headers && req.headers.host) {
+    const host = req.headers.host;
+    if (!host.startsWith('localhost') && !host.startsWith('127.0.0.1')) {
+      const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+      return `${proto}://${host}/q`;
+    }
+  }
+
+  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+    return envUrl;
+  }
+
+  // 4. Dự phòng: IP mạng LAN của máy chủ
+  const port = process.env.PORT || 3000;
+  return `http://${getServerLanIp()}:${port}/q`;
+};
+
+/**
  * Hàm phụ trợ: Sinh ảnh QR Code dạng DataURL (Base64) sắc nét để hiển thị và in tem
  */
-const buildQrDataUrl = async (token) => {
-  const baseUrl = process.env.BASE_QR_URL || 'http://localhost:3000/q';
+const buildQrDataUrl = async (token, req = null) => {
+  const baseUrl = resolveBaseQrUrl(req);
   const scanUrl = `${baseUrl}/${token}`;
   const qrDataUrl = await QRCode.toDataURL(scanUrl, {
     errorCorrectionLevel: 'M',
@@ -19,7 +79,7 @@ const buildQrDataUrl = async (token) => {
       light: '#FFFFFF',
     },
   });
-  return { scanUrl, qrDataUrl };
+  return { scanUrl, qrDataUrl, baseUrl };
 };
 
 /**
@@ -97,7 +157,7 @@ exports.createPrescription = async (req, res) => {
     });
 
     // Sinh thông tin QR trả về ngay cho HIS / Phần mềm nhà thuốc
-    const masterQr = await buildQrDataUrl(prescription.master_qr_token);
+    const masterQr = await buildQrDataUrl(prescription.master_qr_token, req);
 
     return res.status(201).json({
       success: true,
@@ -134,7 +194,7 @@ exports.getAllPrescriptions = async (req, res) => {
 };
 
 /**
- * 3. Lấy chi tiết đơn thuốc kèm toàn bộ mã QR (JSON) để gửi Zalo ZNS / SMS hoặc hiển thị
+ * 3. Lấy chi tiết đơn thuốc kèm toàn bộ mã QR (JSON) để hiển thị
  */
 exports.getPrescriptionQrDetails = async (req, res) => {
   try {
@@ -150,10 +210,10 @@ exports.getPrescriptionQrDetails = async (req, res) => {
       });
     }
 
-    const masterQr = await buildQrDataUrl(prescription.master_qr_token);
+    const masterQr = await buildQrDataUrl(prescription.master_qr_token, req);
     const itemQrs = await Promise.all(
       prescription.items.map(async (item) => {
-        const qr = await buildQrDataUrl(item.item_qr_token);
+        const qr = await buildQrDataUrl(item.item_qr_token, req);
         return {
           item_id: item._id,
           medication_name: item.medication_snapshot.name,
@@ -202,10 +262,10 @@ exports.renderPrintLabelsPage = async (req, res) => {
       return res.status(404).send('<h3>Không tìm thấy đơn thuốc để in tem QR!</h3>');
     }
 
-    const masterQr = await buildQrDataUrl(prescription.master_qr_token);
+    const masterQr = await buildQrDataUrl(prescription.master_qr_token, req);
     const itemLabels = await Promise.all(
       prescription.items.map(async (item) => {
-        const qr = await buildQrDataUrl(item.item_qr_token);
+        const qr = await buildQrDataUrl(item.item_qr_token, req);
         return {
           name: item.medication_snapshot.name,
           qty: `${item.quantity} ${item.medication_snapshot.unit}`,
@@ -229,7 +289,7 @@ exports.renderPrintLabelsPage = async (req, res) => {
     .toolbar {
       max-width: 820px; margin: 0 auto 20px auto; background: #fff; padding: 15px 20px;
       border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-      display: flex; justify-content: space-between; align-items: center;
+      display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
     }
     .btn-print {
       background: #0284c7; color: #fff; border: none; padding: 10px 20px;
@@ -272,6 +332,9 @@ exports.renderPrintLabelsPage = async (req, res) => {
       <h2 style="margin:0 0 4px 0; font-size:18px;">Bản In Tem QR Hướng Dẫn Sử Dụng Thuốc</h2>
       <div style="font-size:13px; color:#475569;">
         Mã HS: <b>${prescription.prescription_code}</b> | Bệnh nhân: <b>${prescription.patient.full_name} (${prescription.patient.birth_year})</b>
+      </div>
+      <div style="font-size:12px; color:#0369a1; margin-top:5px;">
+        🌐 Link nhúng trong mã QR: <a href="${masterQr.scanUrl}" target="_blank" style="color:#0284c7; font-weight:bold;">${masterQr.scanUrl}</a>
       </div>
     </div>
     <button class="btn-print" onclick="window.print()">🖨️ IN TEM NGAY (Ctrl + P)</button>

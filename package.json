@@ -9,6 +9,7 @@
     "seed": "node src/utils/seeder.js"
   },
   "dependencies": {
+    "cloudflared": "^0.7.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",

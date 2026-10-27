@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const connectDB = require('./config/db');
+const { startPublicTunnel } = require('./utils/publicTunnel');
 
 // Import Routes từ các Module
 const medicationRoutes = require('./routes/medication.routes');
@@ -94,13 +95,21 @@ app.get('/', (req, res) => {
   </html>`);
 });
 
-// 6. Khởi động máy chủ
+// 6. Khởi động máy chủ & Tự động bật đường hầm Public HTTPS (Quét QR bằng 4G/5G mọi nơi)
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log('============================================================');
   console.log(`🚀 Server Bệnh viện đang chạy tại : http://localhost:${PORT}`);
   console.log(`💻 Cổng Web Admin Dược sĩ         : http://localhost:${PORT}/admin`);
+  console.log('⏳ Đang khởi tạo đường hầm Public HTTPS (4G/5G)...');
+
+  const publicOrigin = await startPublicTunnel(PORT);
+  if (publicOrigin) {
+    console.log(`🌍 ĐƯỜNG HẦM 4G/5G TOÀN CẦU (HTTPS): ${publicOrigin}`);
+    console.log(`📱 Link QR 4G/5G cho Bệnh nhân     : ${publicOrigin}/q/p_demo123456`);
+  } else {
+    console.log(`📶 Địa chỉ mạng LAN dự phòng      : ${process.env.BASE_QR_URL || `http://localhost:${PORT}/q`}`);
+  }
   console.log(`🖨️ Trang In Tem QR Mẫu            : http://localhost:${PORT}/api/prescriptions/BA20261027_00158/print-labels`);
-  console.log(`📱 Trang Bệnh Nhân Quét QR Tổng   : http://localhost:${PORT}/q/p_demo123456`);
   console.log('============================================================');
 });
