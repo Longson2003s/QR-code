@@ -1,0 +1,22 @@
+{
+  "name": "hospital-qr-med-guide",
+  "version": "1.0.0",
+  "description": "Hệ thống QR Code Hướng dẫn sử dụng thuốc bằng Văn bản, Hình ảnh và Video MP4 cho Bệnh viện",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "seed": "node src/utils/seeder.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "mongoose": "^8.3.2",
+    "multer": "^1.4.5-lts.1",
+    "qrcode": "^1.5.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}
