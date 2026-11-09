@@ -11,6 +11,15 @@ cd /d "%~dp0"
 
 if exist "C:\Program Files\nodejs\node.exe" set "PATH=C:\Program Files\nodejs;%APPDATA%\npm;%PATH%"
 if exist "C:\Program Files (x86)\nodejs\node.exe" set "PATH=C:\Program Files (x86)\nodejs;%APPDATA%\npm;%PATH%"
+if exist "C:\Program Files\Git\cmd\git.exe" set "PATH=C:\Program Files\Git\cmd;%PATH%"
+
+if exist ".git" (
+    echo [0/3] Dang tai code moi nhat tu GitHub ve Server...
+    git fetch origin main >nul 2>nul
+    git reset --hard origin/main >nul 2>nul
+    echo [OK] Da cap nhat code moi nhat tu GitHub.
+    echo.
+)
 
 echo [1/3] Cau hinh file .env...
 (
