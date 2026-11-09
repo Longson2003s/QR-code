@@ -18,7 +18,7 @@ function showToast(message, isError = false) {
  * Chuyển đổi giữa 3 Tab chức năng
  */
 function switchTab(tabId) {
-  const tabs = ['tab-medications', 'tab-prescriptions', 'tab-analytics'];
+  const tabs = ['tab-medications', 'tab-batch-print', 'tab-analytics'];
   tabs.forEach((id) => {
     document.getElementById(id).classList.toggle('hidden', id !== tabId);
     const btn = document.getElementById(`btn-${id}`);
@@ -30,22 +30,20 @@ function switchTab(tabId) {
   });
 
   if (tabId === 'tab-medications') loadMedications();
-  if (tabId === 'tab-prescriptions') {
-    loadMedications().then(() => {
-      refreshPrescriptionDropdowns();
-      loadPrescriptions();
-    });
+  if (tabId === 'tab-batch-print') {
+    loadMedications().then(() => renderBatchSelectionGrid());
   }
   if (tabId === 'tab-analytics') loadAnalytics();
 }
 
 /* ==========================================================================
-   PHẦN 1: QUẢN LÝ KHO THUỐC & UPLOAD HÌNH ẢNH / VIDEO MP4
+   PHẦN 1: XÂY DỰNG KHO THUỐC HƯỚNG DẪN & IN MÃ QR NHỎ TỪNG LOẠI THUỐC
    ========================================================================== */
 
 function addGuideStepRow(stepData = {}) {
   const container = document.getElementById('guide-steps-container');
   const stepIndex = container.children.length + 1;
+  const mediaType = stepData.media_type || 'TEXT_ONLY';
 
   const wrapper = document.createElement('div');
   wrapper.className = 'guide-step-row bg-slate-50 border border-slate-300 rounded-xl p-3.5 space-y-2.5';
@@ -67,9 +65,9 @@ function addGuideStepRow(stepData = {}) {
       </div>
       <div>
         <select class="step-media-type w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold bg-white">
-          <option value="TEXT_ONLY" ${stepData.media_type === 'TEXT_ONLY' ? 'selected' : ''}>📄 Chỉ Văn Bản (Text)</option>
-          <option value="IMAGE" ${stepData.media_type === 'IMAGE' ? 'selected' : ''}>🖼️ Hình Ảnh Minh Họa</option>
-          <option value="VIDEO_MP4" ${stepData.media_type === 'VIDEO_MP4' ? 'selected' : ''}>🎬 Video Hướng Dẫn (MP4)</option>
+          <option value="TEXT_ONLY" ${mediaType === 'TEXT_ONLY' ? 'selected' : ''}>📄 Chỉ Văn Bản (Text)</option>
+          <option value="IMAGE" ${mediaType === 'IMAGE' ? 'selected' : ''}>🖼️ Hình Ảnh Minh Họa</option>
+          <option value="VIDEO_MP4" ${mediaType === 'VIDEO_MP4' ? 'selected' : ''}>🎬 Video Hướng Dẫn (MP4)</option>
         </select>
       </div>
     </div>
@@ -127,7 +125,7 @@ async function handleStepMediaUpload(fileInput) {
     }
 
     urlInput.value = result.data.media_url;
-    typeSelect.value = result.data.media_type; // Tự động chuyển sang IMAGE hoặc VIDEO_MP4
+    typeSelect.value = result.data.media_type;
     showToast(`Đã tải lên thành công: ${result.data.original_name}`);
   } catch (err) {
     urlInput.value = '';
@@ -138,10 +136,10 @@ async function handleStepMediaUpload(fileInput) {
 function resetMedicationForm() {
   document.getElementById('med-id').value = '';
   document.getElementById('med-code').disabled = false;
-  document.getElementById('med-form-title').textContent = '➕ Thêm Thuốc Mới & Các Bước Hướng Dẫn';
+  document.getElementById('med-form-title').textContent = '➕ Thêm Loại Thuốc Mới Vào Kho Hướng Dẫn';
   document.getElementById('medication-form').reset();
   document.getElementById('guide-steps-container').innerHTML = '';
-  addGuideStepRow({ step_order: 1, media_type: 'VIDEO_MP4' });
+  addGuideStepRow({ step_order: 1, media_type: 'TEXT_ONLY' });
 }
 
 async function loadMedications() {
@@ -152,41 +150,87 @@ async function loadMedications() {
     cachedMedications = result.data || [];
 
     const listBox = document.getElementById('medication-list-box');
+    if (!listBox) return;
+
     if (cachedMedications.length === 0) {
-      listBox.innerHTML = `<div class="text-sm text-slate-400 text-center py-8">Chưa có thuốc nào phù hợp.</div>`;
+      listBox.innerHTML = `<div class="text-sm text-slate-400 text-center py-8">Chưa có loại thuốc nào trong kho hướng dẫn.</div>`;
       return;
     }
 
     listBox.innerHTML = cachedMedications
       .map(
         (med) => `
-      <div class="border border-slate-200 rounded-xl p-3.5 hover:border-sky-500 transition bg-slate-50/60">
-        <div class="flex items-start justify-between gap-2">
-          <div>
-            <span class="bg-sky-100 text-sky-800 font-mono text-xs font-bold px-2 py-0.5 rounded">${med.code}</span>
-            <h3 class="font-bold text-slate-900 text-sm mt-1">${med.name}</h3>
-            <p class="text-xs text-slate-500">${med.dosage_form || ''} • Đơn vị: <b>${med.unit}</b></p>
+      <div class="border border-slate-200 rounded-xl p-3.5 hover:border-sky-500 transition bg-slate-50/70 space-y-3">
+        <div class="flex items-start gap-3">
+          <!-- Hình ảnh Mã QR nhỏ riêng biệt của loại thuốc này -->
+          <a href="${med.print_qr_url}" target="_blank" title="Bấm để mở trang in mã QR nhỏ cho thuốc này"
+             class="flex-shrink-0 bg-white p-1.5 rounded-lg border border-slate-300 shadow-sm text-center hover:border-sky-600 transition">
+            <img src="${med.qr_image_base64}" alt="QR ${med.code}" class="w-16 h-16 object-contain mx-auto" />
+            <div class="text-[10px] font-mono font-bold text-slate-600 mt-0.5">${med.qr_token || med.code}</div>
+          </a>
+
+          <!-- Thông tin thuốc -->
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between gap-1 flex-wrap">
+              <span class="bg-sky-100 text-sky-800 font-mono text-xs font-bold px-2 py-0.5 rounded">${med.code}</span>
+              <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                👁️ ${med.scan_stats?.total_scans || 0} lượt quét
+              </span>
+            </div>
+            <h3 class="font-extrabold text-slate-900 text-sm mt-1 leading-snug">${med.name}</h3>
+            <p class="text-xs text-slate-500 mt-0.5">${med.dosage_form || 'Chưa rõ dạng bào chế'} • Đơn vị: <b>${med.unit}</b></p>
+            <div class="mt-1.5 flex items-center gap-2 text-xs text-slate-600">
+              <span>📖 <b>${(med.guides || []).length} bước</b> hướng dẫn</span>
+              <span>•</span>
+              <span class="text-sky-700 font-semibold">
+                ${
+                  (med.guides || []).some((g) => g.media_type === 'VIDEO_MP4' && g.media_url)
+                    ? '🎬 Có Video MP4'
+                    : (med.guides || []).some((g) => g.media_type === 'IMAGE' && g.media_url)
+                    ? '🖼️ Có Hình ảnh'
+                    : '📄 Văn bản HDSD'
+                }
+              </span>
+            </div>
           </div>
-          <button onclick='editMedication(${JSON.stringify(med).replace(/'/g, "&#39;")})'
-            class="bg-white border border-slate-300 hover:bg-sky-50 text-sky-700 text-xs font-bold px-2.5 py-1 rounded-lg">
-            ✏️ Sửa hướng dẫn
-          </button>
         </div>
-        <div class="mt-2 pt-2 border-t border-slate-200/80 flex items-center justify-between text-xs text-slate-600">
-          <span>Số bước hướng dẫn: <b>${(med.guides || []).length} bước</b></span>
-          <span class="text-emerald-700 font-semibold">
-            ${(med.guides || []).some((g) => g.media_type === 'VIDEO_MP4') ? '🎬 Có Video MP4' : '📄 Văn bản/Ảnh'}
-          </span>
+
+        <!-- Thanh nút hành động: In mã QR nhỏ dán hộp thuốc / Xem thử / Sửa / Xóa -->
+        <div class="pt-2.5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-1.5">
+            <a href="${med.print_qr_url}" target="_blank"
+              class="bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition">
+              🖨️ In Mã QR Nhỏ Dán Hộp
+            </a>
+            <a href="/q/${encodeURIComponent(med.qr_token || med.code)}" target="_blank"
+              class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg transition">
+              📱 Xem HDSD
+            </a>
+          </div>
+
+          <div class="flex items-center gap-1.5">
+            <button type="button" onclick='editMedicationById("${med._id}")'
+              class="bg-white border border-slate-300 hover:bg-sky-50 text-sky-700 text-xs font-bold px-2.5 py-1.5 rounded-lg">
+              ✏️ Sửa
+            </button>
+            <button type="button" onclick='deleteMedicationById("${med._id}", ${JSON.stringify(med.name)})'
+              class="bg-white border border-red-200 hover:bg-red-50 text-red-600 text-xs font-bold px-2 py-1.5 rounded-lg">
+              🗑️
+            </button>
+          </div>
         </div>
       </div>`
       )
       .join('');
   } catch (err) {
-    showToast('Không thể tải danh sách thuốc: ' + err.message, true);
+    showToast('Không thể tải kho thuốc: ' + err.message, true);
   }
 }
 
-function editMedication(med) {
+function editMedicationById(medId) {
+  const med = cachedMedications.find((m) => m._id === medId);
+  if (!med) return;
+
   document.getElementById('med-id').value = med._id;
   document.getElementById('med-code').value = med.code;
   document.getElementById('med-code').disabled = true;
@@ -194,9 +238,11 @@ function editMedication(med) {
   document.getElementById('med-ingredient').value = med.active_ingredient || '';
   document.getElementById('med-form').value = med.dosage_form || '';
   document.getElementById('med-unit').value = med.unit || '';
+  document.getElementById('med-usage').value = med.standard_usage || '';
+  document.getElementById('med-storage').value = med.storage_instruction || '';
   document.getElementById('med-warning').value = med.general_warning || '';
   document.getElementById('med-hotline').value = med.hotline_support || '';
-  document.getElementById('med-form-title').textContent = `✏️ Cập Nhật Hướng Dẫn: ${med.code}`;
+  document.getElementById('med-form-title').textContent = `✏️ Cập Nhật Hướng Dẫn & QR: ${med.code}`;
 
   const container = document.getElementById('guide-steps-container');
   container.innerHTML = '';
@@ -206,6 +252,23 @@ function editMedication(med) {
     addGuideStepRow({ step_order: 1 });
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function deleteMedicationById(medId, medName) {
+  if (!confirm(`Bạn có chắc chắn muốn xóa thuốc "${medName}" khỏi kho hướng dẫn?`)) {
+    return;
+  }
+  try {
+    const res = await fetch(`/api/medications/${medId}`, { method: 'DELETE' });
+    const result = await res.json();
+    if (!res.ok || !result.success) {
+      throw new Error(result.message || 'Không thể xóa thuốc');
+    }
+    showToast(result.message);
+    loadMedications();
+  } catch (err) {
+    showToast(err.message, true);
+  }
 }
 
 document.getElementById('medication-form').addEventListener('submit', async (e) => {
@@ -228,6 +291,8 @@ document.getElementById('medication-form').addEventListener('submit', async (e) 
     active_ingredient: document.getElementById('med-ingredient').value.trim(),
     dosage_form: document.getElementById('med-form').value.trim(),
     unit: document.getElementById('med-unit').value.trim(),
+    standard_usage: document.getElementById('med-usage').value.trim(),
+    storage_instruction: document.getElementById('med-storage').value.trim(),
     general_warning: document.getElementById('med-warning').value.trim(),
     hotline_support: document.getElementById('med-hotline').value.trim(),
     guides,
@@ -257,213 +322,129 @@ document.getElementById('medication-form').addEventListener('submit', async (e) 
 });
 
 /* ==========================================================================
-   PHẦN 2: KÊ ĐƠN THUỐC & PHÁT HÀNH TEM NHIỆT QR CODE
+   PHẦN 2: IN TEM MÃ QR NHỎ HÀNG LOẠT THEO LOẠI THUỐC (DÁN HỘP THUỐC)
    ========================================================================== */
 
-function buildMedicationOptionsHtml() {
+function renderBatchSelectionGrid() {
+  const grid = document.getElementById('batch-medications-grid');
+  if (!grid) return;
+
   if (cachedMedications.length === 0) {
-    return `<option value="">-- Vui lòng thêm thuốc ở Tab 1 trước --</option>`;
+    grid.innerHTML = `<div class="col-span-full text-center text-slate-400 py-8">Kho thuốc trống. Vui lòng thêm thuốc ở Tab 1 trước.</div>`;
+    return;
   }
-  return cachedMedications
-    .map((m) => `<option value="${m._id}">${m.name} (${m.code} - ĐV: ${m.unit})</option>`)
+
+  grid.innerHTML = cachedMedications
+    .map(
+      (med) => `
+    <div class="batch-med-card border border-slate-200 rounded-xl p-4 bg-slate-50/70 flex items-center gap-3.5" data-id="${med._id}">
+      <img src="${med.qr_image_base64}" alt="QR" class="w-16 h-16 bg-white p-1 rounded-lg border border-slate-300 flex-shrink-0" />
+      <div class="flex-1 min-w-0">
+        <div class="text-xs font-mono font-bold text-sky-800 truncate">${med.code} • QR: ${med.qr_token}</div>
+        <div class="font-bold text-sm text-slate-900 truncate" title="${med.name}">${med.name}</div>
+        <div class="mt-2 flex items-center justify-between gap-2">
+          <label class="text-xs font-semibold text-slate-600">Số tem cần in:</label>
+          <input type="number" min="0" max="200" value="4"
+            class="batch-qty-input w-20 border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-extrabold text-center bg-white" />
+        </div>
+      </div>
+    </div>`
+    )
     .join('');
 }
 
-function addPrescriptionItemRow() {
-  const container = document.getElementById('rx-items-container');
-  const div = document.createElement('div');
-  div.className = 'rx-item-row bg-slate-50 border border-slate-300 rounded-xl p-3 space-y-2';
-  div.innerHTML = `
-    <div class="flex items-center justify-between gap-2">
-      <select class="rx-med-id flex-1 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold bg-white" required>
-        ${buildMedicationOptionsHtml()}
-      </select>
-      <input type="number" step="0.5" min="0.5" value="1"
-        class="rx-qty w-20 border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-bold text-center"
-        placeholder="SL" title="Số lượng cấp" required />
-      <button type="button" onclick="this.closest('.rx-item-row').remove()"
-        class="text-xs text-red-600 font-bold px-2">✖</button>
-    </div>
-    <div class="grid sm:grid-cols-2 gap-2">
-      <input type="text" class="rx-dosage w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs"
-        placeholder="Liều dùng (*) VD: Sáng xịt 2 nhát, Tối xịt 2 nhát" required />
-      <input type="text" class="rx-timing w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs"
-        placeholder="Thời điểm dùng VD: Sau ăn 30 phút, nhớ súc miệng" />
-    </div>
-    <input type="text" class="rx-note w-full border border-slate-200 rounded-lg px-2.5 py-1 text-xs"
-      placeholder="Ghi chú riêng của Dược sĩ cho lọ thuốc này (nếu có)..." />
-  `;
-  container.appendChild(div);
+function setAllBatchQuantities(qty) {
+  document.querySelectorAll('.batch-qty-input').forEach((input) => {
+    input.value = qty;
+  });
 }
 
-function refreshPrescriptionDropdowns() {
-  const container = document.getElementById('rx-items-container');
-  if (container.children.length === 0) {
-    addPrescriptionItemRow();
-  } else {
-    document.querySelectorAll('.rx-med-id').forEach((select) => {
-      const currentVal = select.value;
-      select.innerHTML = buildMedicationOptionsHtml();
-      if (currentVal) select.value = currentVal;
-    });
+function openBatchPrintWindow() {
+  const cards = Array.from(document.querySelectorAll('.batch-med-card'));
+  const size = document.getElementById('batch-label-size')?.value || '35x22';
+
+  const selectedPairs = [];
+  cards.forEach((card) => {
+    const id = card.getAttribute('data-id');
+    const qty = parseInt(card.querySelector('.batch-qty-input')?.value, 10) || 0;
+    if (id && qty > 0) {
+      selectedPairs.push(`${id}:${qty}`);
+    }
+  });
+
+  if (selectedPairs.length === 0) {
+    return showToast('Vui lòng nhập số lượng tem cần in (> 0) cho ít nhất 1 loại thuốc!', true);
   }
+
+  const url = `/api/medications/print-batch?items=${encodeURIComponent(selectedPairs.join('|'))}&size=${encodeURIComponent(size)}`;
+  window.open(url, '_blank');
 }
-
-async function loadPrescriptions() {
-  try {
-    const res = await fetch('/api/prescriptions');
-    const result = await res.json();
-    const list = result.data || [];
-
-    const box = document.getElementById('prescription-list-box');
-    if (list.length === 0) {
-      box.innerHTML = `<div class="text-sm text-slate-400 text-center py-8">Chưa có đơn thuốc nào.</div>`;
-      return;
-    }
-
-    box.innerHTML = list
-      .map(
-        (rx) => `
-      <div class="border border-slate-200 rounded-xl p-4 bg-slate-50/70 space-y-2">
-        <div class="flex items-start justify-between">
-          <div>
-            <span class="bg-sky-800 text-white font-mono text-xs font-bold px-2.5 py-0.5 rounded">${rx.prescription_code}</span>
-            <h3 class="font-extrabold text-slate-900 text-sm mt-1">
-              BN: ${rx.patient.full_name} (${rx.patient.birth_year}) • <span class="text-slate-500 font-normal">${rx.patient.patient_code}</span>
-            </h3>
-            <p class="text-xs text-slate-500">${rx.doctor.department} — ${rx.doctor.name}</p>
-          </div>
-          <span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-2.5 py-1 rounded-full">
-            👁️ Đã quét: ${rx.scan_stats?.total_scans || 0} lần
-          </span>
-        </div>
-
-        <div class="text-xs text-slate-700 bg-white p-2.5 rounded-lg border border-slate-200 space-y-1">
-          ${rx.items
-            .map(
-              (item, i) => `
-            <div class="flex items-center justify-between">
-              <span><b>${i + 1}. ${item.medication_snapshot.name}</b> (SL: ${item.quantity} ${item.medication_snapshot.unit})</span>
-              <a href="/q/${item.item_qr_token}" target="_blank" class="text-sky-700 underline font-mono">${item.item_qr_token}</a>
-            </div>`
-            )
-            .join('')}
-        </div>
-
-        <div class="pt-1 flex flex-wrap items-center justify-between gap-2">
-          <a href="/api/prescriptions/${rx.prescription_code}/print-labels" target="_blank"
-            class="bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-sm">
-            🖨️ In Tem Nhiệt QR (Hồ sơ & Lọ thuốc)
-          </a>
-          <a href="/q/${rx.master_qr_token}" target="_blank"
-            class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg">
-            📱 Mở Giao Diện Quét Tổng (/q/${rx.master_qr_token})
-          </a>
-        </div>
-      </div>`
-      )
-      .join('');
-  } catch (err) {
-    showToast('Lỗi tải danh sách đơn thuốc: ' + err.message, true);
-  }
-}
-
-document.getElementById('prescription-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const itemRows = Array.from(document.querySelectorAll('.rx-item-row'));
-  if (itemRows.length === 0) {
-    return showToast('Vui lòng thêm ít nhất 1 thuốc vào đơn!', true);
-  }
-
-  const items = itemRows.map((row) => ({
-    medication_id: row.querySelector('.rx-med-id').value,
-    quantity: Number(row.querySelector('.rx-qty').value) || 1,
-    dosage_instruction: row.querySelector('.rx-dosage').value.trim(),
-    usage_timing: row.querySelector('.rx-timing').value.trim(),
-    custom_note: row.querySelector('.rx-note').value.trim(),
-  }));
-
-  const payload = {
-    prescription_code: document.getElementById('rx-code').value.trim(),
-    patient: {
-      patient_code: document.getElementById('rx-patient-code').value.trim(),
-      full_name: document.getElementById('rx-patient-name').value.trim(),
-      birth_year: Number(document.getElementById('rx-patient-birth').value),
-    },
-    doctor: {
-      name: document.getElementById('rx-doctor-name').value.trim(),
-      department: document.getElementById('rx-department').value.trim(),
-    },
-    general_note: document.getElementById('rx-general-note').value.trim(),
-    items,
-  };
-
-  try {
-    const res = await fetch('/api/prescriptions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const result = await res.json();
-
-    if (!res.ok || !result.success) {
-      throw new Error(result.message || 'Lỗi tạo đơn thuốc');
-    }
-
-    showToast('Đã tạo đơn thuốc & sinh mã QR thành công!');
-    // Tự động sinh mã đơn mới ngẫu nhiên cho lần nhập tiếp theo
-    document.getElementById('rx-code').value = `BA${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Math.floor(1000 + Math.random() * 9000)}`;
-    loadPrescriptions();
-
-    // Mở ngay cửa sổ In Tem Nhiệt QR cho Dược sĩ
-    if (result.data?.print_labels_url) {
-      window.open(result.data.print_labels_url, '_blank');
-    }
-  } catch (err) {
-    showToast(err.message, true);
-  }
-});
 
 /* ==========================================================================
-   PHẦN 3: BÁO CÁO THỐNG KÊ LƯỢT QUÉT QR CHO GIÁM ĐỐC BỆNH VIỆN
+   PHẦN 3: THỐNG KÊ LƯỢT QUÉT MÃ QR THEO TỪNG LOẠI THUỐC
    ========================================================================== */
 
 async function loadAnalytics() {
   try {
-    const res = await fetch('/api/prescriptions/analytics/scans');
+    const res = await fetch('/api/medications/analytics/scans');
     const result = await res.json();
     if (!result.success) return;
 
-    document.getElementById('stat-total-rx').textContent = result.data.total_prescriptions_issued;
+    document.getElementById('stat-total-meds').textContent = result.data.total_medications;
     document.getElementById('stat-total-scans').textContent = result.data.total_qr_scans;
 
-    const tbody = document.getElementById('scan-logs-tbody');
-    const logs = result.data.recent_scans || [];
-    if (logs.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">Chưa có lượt quét QR nào được ghi nhận.</td></tr>`;
-      return;
+    const medStatsTbody = document.getElementById('med-stats-tbody');
+    const medStats = result.data.medication_stats || [];
+    if (medStats.length === 0) {
+      medStatsTbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">Chưa có loại thuốc nào trong kho.</td></tr>`;
+    } else {
+      medStatsTbody.innerHTML = medStats
+        .map(
+          (m) => `
+        <tr class="hover:bg-slate-50">
+          <td class="p-3 font-mono font-bold text-slate-800">${m.code}</td>
+          <td class="p-3 font-bold text-slate-900">${m.name} <span class="text-xs font-normal text-slate-500">(${m.unit})</span></td>
+          <td class="p-3 font-mono text-sky-700 font-bold">
+            <a href="/q/${encodeURIComponent(m.qr_token || m.code)}" target="_blank" class="underline">${m.qr_token || m.code}</a>
+          </td>
+          <td class="p-3 text-xs">${(m.guides || []).length} bước</td>
+          <td class="p-3">
+            <span class="bg-emerald-100 text-emerald-800 text-xs font-extrabold px-2.5 py-1 rounded-full">
+              ${m.scan_stats?.total_scans || 0} lượt quét
+            </span>
+          </td>
+          <td class="p-3 text-right">
+            <a href="/api/medications/${encodeURIComponent(m._id)}/print-qr" target="_blank"
+              class="inline-block bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg">
+              🖨️ In Mã QR Nhỏ
+            </a>
+          </td>
+        </tr>`
+        )
+        .join('');
     }
 
-    tbody.innerHTML = logs
-      .map(
-        (log) => `
-      <tr class="hover:bg-slate-50">
-        <td class="p-3 font-medium">${new Date(log.scanned_at).toLocaleString('vi-VN')}</td>
-        <td class="p-3 font-mono font-bold text-sky-700">
-          <a href="/q/${log.qr_token}" target="_blank" class="underline">${log.qr_token}</a>
-        </td>
-        <td class="p-3">
-          ${
-            log.target_type === 'MASTER_PRESCRIPTION'
-              ? '<span class="bg-sky-100 text-sky-800 text-xs font-bold px-2 py-0.5 rounded">QR Tổng Hồ Sơ</span>'
-              : '<span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-2 py-0.5 rounded">QR Lẻ Lọ Thuốc</span>'
-          }
-        </td>
-        <td class="p-3 text-xs">${log.medication_id ? log.medication_id.name : 'Toàn bộ đơn thuốc'}</td>
-        <td class="p-3 text-xs text-slate-500 max-w-xs truncate" title="${log.device_info}">${log.device_info}</td>
-      </tr>`
-      )
-      .join('');
+    const logsTbody = document.getElementById('scan-logs-tbody');
+    const logs = result.data.recent_scans || [];
+    if (logs.length === 0) {
+      logsTbody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-slate-400">Chưa có lượt quét mã QR nào được ghi nhận.</td></tr>`;
+    } else {
+      logsTbody.innerHTML = logs
+        .map(
+          (log) => `
+        <tr class="hover:bg-slate-50">
+          <td class="p-3 font-medium">${new Date(log.scanned_at).toLocaleString('vi-VN')}</td>
+          <td class="p-3 font-mono font-bold text-sky-700">
+            <a href="/q/${encodeURIComponent(log.qr_token)}" target="_blank" class="underline">${log.qr_token}</a>
+          </td>
+          <td class="p-3 font-semibold text-slate-800">
+            ${log.medication_id ? `${log.medication_id.name} (${log.medication_id.code})` : log.medication_name || log.medication_code}
+          </td>
+          <td class="p-3 text-xs text-slate-500 max-w-xs truncate" title="${log.device_info}">${log.device_info}</td>
+        </tr>`
+        )
+        .join('');
+    }
   } catch (err) {
     showToast('Lỗi tải thống kê: ' + err.message, true);
   }
@@ -473,5 +454,4 @@ async function loadAnalytics() {
 window.addEventListener('DOMContentLoaded', () => {
   resetMedicationForm();
   loadMedications();
-  document.getElementById('rx-code').value = `BA${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Math.floor(1000 + Math.random() * 9000)}`;
 });

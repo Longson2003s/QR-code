@@ -1,5 +1,6 @@
 // File: src/models/Medication.model.js
 const mongoose = require('mongoose');
+const { generateQrToken } = require('../utils/tokenGenerator');
 
 // Sub-schema: Từng bước hướng dẫn sử dụng (Văn bản, Hình ảnh, Video MP4)
 const GuideStepSchema = new mongoose.Schema(
@@ -40,16 +41,22 @@ const GuideStepSchema = new mongoose.Schema(
   { _id: true }
 );
 
-// Main Schema: Danh mục thuốc gốc
+// Main Schema: Kho thuốc hướng dẫn (Mỗi loại thuốc có 1 mã QR riêng biệt để in dán vào hộp thuốc)
 const MedicationSchema = new mongoose.Schema(
   {
     code: {
       type: String,
-      required: [true, 'Mã thuốc (HIS Code) là bắt buộc'],
+      required: [true, 'Mã thuốc là bắt buộc'],
       unique: true,
       uppercase: true,
       trim: true,
-      index: true, // Đánh Index để đồng bộ HIS và tra cứu tức thì
+      index: true,
+    },
+    qr_token: {
+      type: String,
+      unique: true,
+      index: true,
+      default: () => generateQrToken('m', 4), // Mã token ngắn gọn (VD: m_a1b2c3d4) giúp mã QR in cỡ siêu nhỏ vẫn dễ quét
     },
     name: {
       type: String,
@@ -69,20 +76,35 @@ const MedicationSchema = new mongoose.Schema(
     unit: {
       type: String,
       required: true,
-      trim: true, // VD: Bình, Bút, Lọ, Viên
+      trim: true, // VD: Hộp, Bình, Bút, Lọ, Tuýp
+    },
+    standard_usage: {
+      type: String,
+      trim: true,
+      default: '', // Tóm tắt cách dùng / liều dùng chung của loại thuốc này
+    },
+    storage_instruction: {
+      type: String,
+      trim: true,
+      default: '', // Hướng dẫn bảo quản hộp thuốc (VD: Nơi khô mát <30°C, hoặc Ngăn mát tủ lạnh 2-8°C)
     },
     general_warning: {
       type: String,
-      default: '', // Cảnh báo chung nổi bật (màu đỏ/vàng trên giao diện BN)
+      default: '', // Cảnh báo chung nổi bật (màu đỏ/vàng trên giao diện khi quét hộp thuốc)
     },
     hotline_support: {
       type: String,
-      default: '1900-1234 (Tổ Dược Lâm Sàng)',
+      default: '1900-6868 (Tổ Dược Lâm Sàng)',
     },
     // MẢNG NHÚNG: Toàn bộ các bước hướng dẫn nằm trực tiếp trong Document thuốc
     guides: {
       type: [GuideStepSchema],
       default: [],
+    },
+    // Thống kê số lượt quét mã QR dán trên hộp thuốc của loại thuốc này
+    scan_stats: {
+      total_scans: { type: Number, default: 0 },
+      last_scanned_at: { type: Date, default: null },
     },
     is_active: {
       type: Boolean,
@@ -94,8 +116,11 @@ const MedicationSchema = new mongoose.Schema(
   }
 );
 
-// Đảm bảo mảng guides luôn được sắp xếp theo step_order tăng dần trước khi lưu
+// Đảm bảo luôn có qr_token và mảng guides được sắp xếp theo step_order tăng dần trước khi lưu
 MedicationSchema.pre('save', function (next) {
+  if (!this.qr_token) {
+    this.qr_token = generateQrToken('m', 4);
+  }
   if (this.guides && this.guides.length > 0) {
     this.guides.sort((a, b) => a.step_order - b.step_order);
   }

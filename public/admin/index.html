@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cổng Quản Trị Dược Lâm Sàng & In Tem QR - Bệnh Viện</title>
+  <title>Quản Trị Kho Thuốc Hướng Dẫn & In Mã QR Nhỏ Dán Hộp Thuốc</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen">
@@ -14,14 +14,14 @@
       <div class="flex items-center gap-3">
         <div class="bg-white text-sky-800 font-black px-3 py-1.5 rounded-lg text-lg">QR-MED</div>
         <div>
-          <h1 class="text-lg font-bold leading-tight">Hệ Thống Quản Trị Hướng Dẫn Sử Dụng Thuốc & In Tem QR</h1>
-          <p class="text-xs text-sky-200">Dành cho Dược sĩ Lâm sàng • Nhà thuốc Bệnh viện • Ban Giám đốc</p>
+          <h1 class="text-lg font-bold leading-tight">Hệ Thống Kho Thuốc Hướng Dẫn & In Mã QR Nhỏ Dán Hộp Thuốc</h1>
+          <p class="text-xs text-sky-200">Mỗi loại thuốc có một mã QR nhỏ riêng biệt • Dán trực tiếp lên vỏ hộp / lọ thuốc</p>
         </div>
       </div>
       <div class="flex items-center gap-2 text-sm">
         <a href="/" class="bg-sky-700 hover:bg-sky-600 px-3 py-1.5 rounded-lg transition">🏠 Trang chủ</a>
-        <a href="/q/p_demo123456" target="_blank" class="bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-lg font-semibold transition">
-          📱 Xem thử Giao diện Bệnh nhân
+        <a href="/api/medications/print-batch" target="_blank" class="bg-emerald-600 hover:bg-emerald-500 px-3.5 py-1.5 rounded-lg font-bold transition shadow-sm">
+          🖨️ In Nhanh Toàn Bộ Tem QR Kho Thuốc
         </a>
       </div>
     </div>
@@ -29,18 +29,18 @@
 
   <!-- Thanh chuyển Tab chức năng -->
   <div class="bg-white border-b border-slate-200 shadow-sm">
-    <div class="max-w-7xl mx-auto px-4 flex gap-2 overflow-x-auto py-2">
+    <div class="max-w-7xl mx-auto px-4 flex gap-2 overflow-x-auto py-2.5">
       <button onclick="switchTab('tab-medications')" id="btn-tab-medications"
         class="tab-btn bg-sky-700 text-white font-bold px-4 py-2 rounded-lg text-sm transition">
-        💊 1. Kho Thuốc & Upload Video MP4 / Ảnh
+        💊 1. Xây Dựng Kho Thuốc Hướng Dẫn & In QR Từng Loại
       </button>
-      <button onclick="switchTab('tab-prescriptions')" id="btn-tab-prescriptions"
+      <button onclick="switchTab('tab-batch-print')" id="btn-tab-batch-print"
         class="tab-btn bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg text-sm transition">
-        🖨️ 2. Kê Đơn & Phát Hành Tem Nhiệt QR
+        🏷️ 2. In Tem Mã QR Nhỏ Theo Số Lượng Hộp Thuốc
       </button>
       <button onclick="switchTab('tab-analytics')" id="btn-tab-analytics"
         class="tab-btn bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg text-sm transition">
-        📊 3. Báo Cáo Lượt Quét QR (Giám Đốc)
+        📊 3. Thống Kê Lượt Quét QR Từng Loại Thuốc
       </button>
     </div>
   </div>
@@ -52,16 +52,19 @@
   <main class="max-w-7xl mx-auto px-4 py-6">
 
     <!-- ========================================================================= -->
-    <!-- TAB 1: QUẢN LÝ KHO THUỐC & UPLOAD HÌNH ẢNH / VIDEO MP4                    -->
+    <!-- TAB 1: XÂY DỰNG KHO THUỐC HƯỚNG DẪN & MÃ QR RIÊNG TỪNG LOẠI THUỐC         -->
     <!-- ========================================================================= -->
     <section id="tab-medications" class="space-y-6">
       <div class="grid lg:grid-cols-12 gap-6">
         <!-- Cột trái: Form thêm/cập nhật thuốc và các bước hướng dẫn -->
         <div class="lg:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
           <div class="flex items-center justify-between border-b pb-3 mb-4">
-            <h2 id="med-form-title" class="text-lg font-extrabold text-slate-900">
-              ➕ Thêm Thuốc Mới & Các Bước Hướng Dẫn
-            </h2>
+            <div>
+              <h2 id="med-form-title" class="text-lg font-extrabold text-slate-900">
+                ➕ Thêm Loại Thuốc Mới Vào Kho Hướng Dẫn
+              </h2>
+              <p class="text-xs text-slate-500 mt-0.5">Hệ thống tự động sinh một Mã QR nhỏ riêng biệt cho mỗi loại thuốc để in dán lên hộp thuốc</p>
+            </div>
             <button type="button" onclick="resetMedicationForm()"
               class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg font-semibold">
               Làm mới Form
@@ -73,43 +76,56 @@
 
             <div class="grid sm:grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1">Mã thuốc HIS (*) <span class="text-slate-400 font-normal">VD: MED_VENTOLIN</span></label>
+                <label class="block text-xs font-bold text-slate-700 mb-1">Mã loại thuốc (*) <span class="text-slate-400 font-normal">VD: MED_SYMBICORT_160</span></label>
                 <input type="text" id="med-code" required placeholder="Nhập mã thuốc..."
-                  class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm uppercase focus:ring-2 focus:ring-sky-500 outline-none" />
+                  class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm uppercase font-mono focus:ring-2 focus:ring-sky-500 outline-none" />
               </div>
               <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1">Tên thương mại (*)</label>
-                <input type="text" id="med-name" required placeholder="VD: Bình xịt Ventolin Inhaler 100mcg"
+                <label class="block text-xs font-bold text-slate-700 mb-1">Tên thương mại trên hộp thuốc (*)</label>
+                <input type="text" id="med-name" required placeholder="VD: Bình hít Symbicort Turbuhaler 160/4.5mcg"
                   class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500 outline-none" />
               </div>
             </div>
 
             <div class="grid sm:grid-cols-3 gap-3">
               <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1">Hoạt chất</label>
-                <input type="text" id="med-ingredient" placeholder="VD: Salbutamol"
+                <label class="block text-xs font-bold text-slate-700 mb-1">Hoạt chất / Hàm lượng</label>
+                <input type="text" id="med-ingredient" placeholder="VD: Budesonide / Formoterol"
                   class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none" />
               </div>
               <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1">Dạng bào chế</label>
-                <input type="text" id="med-form" placeholder="VD: Bình xịt định liều"
+                <label class="block text-xs font-bold text-slate-700 mb-1">Dạng bào chế / Quy cách hộp</label>
+                <input type="text" id="med-form" placeholder="VD: Bình hít bột khô (Hộp 1 bình 60 liều)"
                   class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none" />
               </div>
               <div>
                 <label class="block text-xs font-bold text-slate-700 mb-1">Đơn vị tính (*)</label>
-                <input type="text" id="med-unit" required placeholder="VD: Bình, Bút, Lọ, Viên"
+                <input type="text" id="med-unit" required placeholder="VD: Hộp, Bình, Bút, Lọ, Tuýp"
                   class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none" />
               </div>
             </div>
 
             <div class="grid sm:grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-bold text-red-700 mb-1">⚠️ Cảnh báo quan trọng (Hiển thị nổi bật)</label>
-                <input type="text" id="med-warning" placeholder="VD: Lắc kỹ bình trước khi xịt, súc miệng sau khi dùng..."
+                <label class="block text-xs font-bold text-emerald-800 mb-1">📌 Tóm tắt cách dùng chung (Hiển thị đầu trang & trên tem lớn)</label>
+                <input type="text" id="med-usage" placeholder="VD: Hít bằng miệng theo liều chỉ định, súc miệng sạch sau khi hít"
+                  class="w-full border border-emerald-300 bg-emerald-50/30 rounded-lg px-3 py-2 text-sm outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-sky-800 mb-1">❄️ Hướng dẫn bảo quản hộp thuốc</label>
+                <input type="text" id="med-storage" placeholder="VD: Bảo quản nơi khô ráo dưới 30°C, đậy kín nắp sau khi dùng"
+                  class="w-full border border-sky-200 bg-sky-50/30 rounded-lg px-3 py-2 text-sm outline-none" />
+              </div>
+            </div>
+
+            <div class="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-red-700 mb-1">⚠️ Cảnh báo quan trọng (Hiển thị nổi bật màu đỏ)</label>
+                <input type="text" id="med-warning" placeholder="VD: Bắt buộc súc miệng sau khi hít để tránh nấm miệng..."
                   class="w-full border border-red-300 bg-red-50/40 rounded-lg px-3 py-2 text-sm outline-none" />
               </div>
               <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1">☎️ Hotline Dược lâm sàng hỗ trợ</label>
+                <label class="block text-xs font-bold text-slate-700 mb-1">☎️ Hotline Dược sĩ tư vấn</label>
                 <input type="text" id="med-hotline" value="1900-6868 (Tổ Dược Lâm Sàng)"
                   class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none" />
               </div>
@@ -119,8 +135,8 @@
             <div class="border-t pt-4">
               <div class="flex items-center justify-between mb-3">
                 <div>
-                  <h3 class="text-sm font-extrabold text-sky-900">🎬 Các bước hướng dẫn sử dụng (Văn bản / Hình ảnh / Video MP4)</h3>
-                  <p class="text-xs text-slate-500">Bạn có thể chọn file Ảnh hoặc Video MP4 trực tiếp từ máy tính cho từng bước.</p>
+                  <h3 class="text-sm font-extrabold text-sky-900">🎬 Các bước hướng dẫn sử dụng chi tiết (Văn bản / Hình ảnh / Video MP4)</h3>
+                  <p class="text-xs text-slate-500">Khi quét mã QR dán trên hộp thuốc, người dùng sẽ xem lần lượt từng bước này.</p>
                 </div>
                 <button type="button" onclick="addGuideStepRow()"
                   class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-sm">
@@ -134,136 +150,90 @@
             <div class="pt-3 border-t flex justify-end gap-3">
               <button type="submit"
                 class="bg-sky-700 hover:bg-sky-800 text-white font-bold px-6 py-2.5 rounded-xl shadow transition text-sm">
-                💾 LƯU THUỐC & HƯỚNG DẪN VÀO MONGODB
+                💾 LƯU VÀO KHO THUỐC & TẠO MÃ QR RIÊNG
               </button>
             </div>
           </form>
         </div>
 
-        <!-- Cột phải: Danh sách thuốc hiện có trong kho -->
+        <!-- Cột phải: Danh sách Kho thuốc hướng dẫn kèm Mã QR nhỏ từng loại -->
         <div class="lg:col-span-5 bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
           <div class="flex items-center justify-between border-b pb-3 mb-4">
-            <h2 class="text-lg font-extrabold text-slate-900">📚 Kho Thuốc Đã Có Hướng Dẫn</h2>
+            <div>
+              <h2 class="text-lg font-extrabold text-slate-900">📚 Kho Thuốc & Mã QR Từng Loại</h2>
+              <p class="text-xs text-slate-500">Bấm "In Mã QR Nhỏ Dán Hộp" ở từng thuốc để in tem dán lên hộp thuốc</p>
+            </div>
             <button onclick="loadMedications()" class="text-xs text-sky-700 font-bold underline">Tải lại</button>
           </div>
           <div class="mb-3">
             <input type="text" id="search-med-input" oninput="loadMedications()"
-              placeholder="🔍 Tìm theo mã thuốc, tên thuốc hoặc hoạt chất..."
-              class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none" />
+              placeholder="🔍 Tìm theo mã thuốc, tên thuốc, hoạt chất..."
+              class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
           </div>
-          <div id="medication-list-box" class="space-y-3 max-h-[650px] overflow-y-auto pr-1"></div>
+          <div id="medication-list-box" class="space-y-3.5 max-h-[720px] overflow-y-auto pr-1"></div>
         </div>
       </div>
     </section>
 
     <!-- ========================================================================= -->
-    <!-- TAB 2: KÊ ĐƠN THUỐC & IN TEM NHIỆT QR CODE                                -->
+    <!-- TAB 2: IN TEM MÃ QR NHỎ HÀNG LOẠT THEO LOẠI THUỐC (DÁN HỘP THUỐC)         -->
     <!-- ========================================================================= -->
-    <section id="tab-prescriptions" class="hidden space-y-6">
-      <div class="grid lg:grid-cols-12 gap-6">
-        <!-- Cột trái: Form tạo đơn thuốc & sinh mã QR -->
-        <div class="lg:col-span-6 bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
-          <h2 class="text-lg font-extrabold text-slate-900 border-b pb-3 mb-4">
-            📝 Tạo Hồ Sơ Đơn Thuốc & Phát Hành Mã QR
-          </h2>
-
-          <form id="prescription-form" class="space-y-4">
-            <div class="grid sm:grid-cols-2 gap-3">
-              <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1">Mã Hồ Sơ / Mã Đơn Thuốc (*)</label>
-                <input type="text" id="rx-code" required placeholder="VD: BA20261027_00999"
-                  class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono outline-none" />
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1">Mã Bệnh Nhân (*)</label>
-                <input type="text" id="rx-patient-code" required placeholder="VD: BN_102938"
-                  class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none" />
-              </div>
-            </div>
-
-            <div class="grid sm:grid-cols-3 gap-3">
-              <div class="sm:col-span-2">
-                <label class="block text-xs font-bold text-slate-700 mb-1">Họ và Tên Người Bệnh (*)</label>
-                <input type="text" id="rx-patient-name" required placeholder="VD: Lê Thị Hoa"
-                  class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none" />
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1">Năm sinh (*)</label>
-                <input type="number" id="rx-patient-birth" required value="1962"
-                  class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none" />
-              </div>
-            </div>
-
-            <div class="grid sm:grid-cols-2 gap-3">
-              <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1">Bác sĩ kê đơn (*)</label>
-                <input type="text" id="rx-doctor-name" required value="BS.CKI Nguyễn Hoàng Nam"
-                  class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none" />
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1">Khoa / Phòng khám (*)</label>
-                <input type="text" id="rx-department" required value="Khoa Nội Tổng Hợp"
-                  class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none" />
-              </div>
-            </div>
-
-            <div>
-              <label class="block text-xs font-bold text-slate-700 mb-1">Lời dặn chung của Bác sĩ cho cả đơn</label>
-              <input type="text" id="rx-general-note"
-                placeholder="VD: Tái khám sau 2 tuần. Uống đủ nước và tuân thủ đúng thao tác trong video hướng dẫn."
-                class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none" />
-            </div>
-
-            <!-- Danh sách thuốc kê trong đơn -->
-            <div class="border-t pt-4">
-              <div class="flex items-center justify-between mb-3">
-                <h3 class="text-sm font-extrabold text-sky-900">💊 Danh sách thuốc trong đơn & Liều dùng cá nhân</h3>
-                <button type="button" onclick="addPrescriptionItemRow()"
-                  class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg">
-                  + Thêm Thuốc Vào Đơn
-                </button>
-              </div>
-              <div id="rx-items-container" class="space-y-3"></div>
-            </div>
-
-            <div class="pt-3 border-t flex justify-end">
-              <button type="submit"
-                class="bg-sky-700 hover:bg-sky-800 text-white font-bold px-6 py-2.5 rounded-xl shadow transition text-sm">
-                🖨️ TẠO ĐƠN & SINH TEM QR NGAY
-              </button>
-            </div>
-          </form>
-        </div>
-
-        <!-- Cột phải: Danh sách đơn thuốc đã tạo & Nút bấm In Tem Nhiệt / Mở QR -->
-        <div class="lg:col-span-6 bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
-          <div class="flex items-center justify-between border-b pb-3 mb-4">
-            <h2 class="text-lg font-extrabold text-slate-900">🗂️ Danh Sách Hồ Sơ Đơn Thuốc & Tem QR</h2>
-            <button onclick="loadPrescriptions()" class="text-xs text-sky-700 font-bold underline">Làm mới</button>
+    <section id="tab-batch-print" class="hidden space-y-6">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-4 border-b pb-4">
+          <div>
+            <h2 class="text-lg font-extrabold text-slate-900">🏷️ Chọn Số Lượng Tem Mã QR Nhỏ Cần In Cho Từng Loại Thuốc</h2>
+            <p class="text-xs text-slate-600 mt-0.5">
+              Dành cho Dược sĩ kho: Chọn số lượng hộp thuốc cần dán mã QR đối với từng loại thuốc và chọn kích thước tem nhỏ phù hợp với vỏ hộp.
+            </p>
           </div>
-          <div id="prescription-list-box" class="space-y-3 max-h-[650px] overflow-y-auto pr-1"></div>
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="flex items-center gap-2 text-xs font-bold text-slate-700 bg-slate-100 px-3 py-2 rounded-xl border border-slate-200">
+              <span>📐 Kích thước tem nhỏ:</span>
+              <select id="batch-label-size" class="bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-bold outline-none">
+                <option value="22x22">Siêu nhỏ 22x22mm (Dán lọ nhỏ / bút tiêm / vỉ thuốc)</option>
+                <option value="35x22" selected>Nhỏ chuẩn 35x22mm (Dán vỏ hộp thuốc tiêu chuẩn)</option>
+                <option value="50x30">Tem vừa 50x30mm (Hộp thuốc lớn - Kèm cách dùng)</option>
+              </select>
+            </div>
+            <button type="button" onclick="openBatchPrintWindow()"
+              class="bg-sky-700 hover:bg-sky-800 text-white font-bold px-5 py-2.5 rounded-xl shadow text-sm transition">
+              🖨️ MỞ TRANG IN TEM QR ĐÃ CHỌN &rarr;
+            </button>
+          </div>
         </div>
+
+        <div class="flex items-center gap-2 text-xs">
+          <span class="font-bold text-slate-600">Đặt nhanh số lượng tem cho tất cả loại thuốc:</span>
+          <button type="button" onclick="setAllBatchQuantities(0)" class="bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded font-semibold">Đặt về 0</button>
+          <button type="button" onclick="setAllBatchQuantities(4)" class="bg-sky-50 hover:bg-sky-100 text-sky-800 px-2.5 py-1 rounded font-bold">Mỗi loại 4 tem</button>
+          <button type="button" onclick="setAllBatchQuantities(10)" class="bg-sky-50 hover:bg-sky-100 text-sky-800 px-2.5 py-1 rounded font-bold">Mỗi loại 10 tem</button>
+          <button type="button" onclick="setAllBatchQuantities(20)" class="bg-sky-50 hover:bg-sky-100 text-sky-800 px-2.5 py-1 rounded font-bold">Mỗi loại 20 tem</button>
+        </div>
+
+        <div id="batch-medications-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
       </div>
     </section>
 
     <!-- ========================================================================= -->
-    <!-- TAB 3: BÁO CÁO LƯỢT QUÉT MÃ QR DÀNH CHO GIÁM ĐỐC BỆNH VIỆN                 -->
+    <!-- TAB 3: BÁO CÁO THỐNG KÊ LƯỢT QUÉT MÃ QR THEO TỪNG LOẠI THUỐC              -->
     <!-- ========================================================================= -->
     <section id="tab-analytics" class="hidden space-y-6">
       <div class="grid sm:grid-cols-2 gap-4">
         <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
-          <div class="text-xs font-bold uppercase text-slate-500">Tổng số hồ sơ đơn thuốc đã phát hành QR</div>
-          <div id="stat-total-rx" class="text-4xl font-black text-sky-700 mt-2">0</div>
+          <div class="text-xs font-bold uppercase text-slate-500">Tổng số loại thuốc trong Kho hướng dẫn (Có mã QR riêng)</div>
+          <div id="stat-total-meds" class="text-4xl font-black text-sky-700 mt-2">0</div>
         </div>
         <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
-          <div class="text-xs font-bold uppercase text-slate-500">Tổng số lượt Bệnh nhân đã quét mã QR xem hướng dẫn</div>
+          <div class="text-xs font-bold uppercase text-slate-500">Tổng số lượt quét mã QR trên các hộp thuốc</div>
           <div id="stat-total-scans" class="text-4xl font-black text-emerald-600 mt-2">0</div>
         </div>
       </div>
 
+      <!-- Bảng thống kê theo từng loại thuốc -->
       <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
         <div class="flex items-center justify-between border-b pb-3 mb-4">
-          <h2 class="text-lg font-extrabold text-slate-900">🕒 Nhật Ký Bệnh Nhân Quét Mã QR Gần Nhất (Realtime)</h2>
+          <h2 class="text-lg font-extrabold text-slate-900">💊 Thống Kê Lượt Quét & In Tem QR Theo Từng Loại Thuốc</h2>
           <button onclick="loadAnalytics()" class="text-xs bg-sky-50 text-sky-700 font-bold px-3 py-1.5 rounded-lg">
             🔄 Cập nhật số liệu
           </button>
@@ -272,11 +242,30 @@
           <table class="w-full text-left border-collapse text-sm">
             <thead>
               <tr class="bg-slate-100 text-slate-700 text-xs uppercase">
+                <th class="p-3 rounded-tl-lg">Mã Thuốc</th>
+                <th class="p-3">Tên Loại Thuốc</th>
+                <th class="p-3">Mã QR Riêng</th>
+                <th class="p-3">Số Bước HDSD</th>
+                <th class="p-3">Số Lượt Quét Hộp Thuốc</th>
+                <th class="p-3 rounded-tr-lg text-right">Thao Tác In Tem Nhỏ</th>
+              </tr>
+            </thead>
+            <tbody id="med-stats-tbody" class="divide-y divide-slate-200"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Nhật ký quét gần nhất -->
+      <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+        <h2 class="text-lg font-extrabold text-slate-900 border-b pb-3 mb-4">🕒 Nhật Ký Quét Mã QR Trên Hộp Thuốc Gần Nhất</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="bg-slate-100 text-slate-700 text-xs uppercase">
                 <th class="p-3 rounded-tl-lg">Thời gian quét</th>
-                <th class="p-3">Mã Token QR</th>
-                <th class="p-3">Loại Tem Quét</th>
-                <th class="p-3">Thuốc (Nếu quét lọ lẻ)</th>
-                <th class="p-3 rounded-tr-lg">Thiết bị của Bệnh nhân</th>
+                <th class="p-3">Mã QR Hộp Thuốc</th>
+                <th class="p-3">Loại Thuốc Được Quét</th>
+                <th class="p-3 rounded-tr-lg">Thiết bị quét</th>
               </tr>
             </thead>
             <tbody id="scan-logs-tbody" class="divide-y divide-slate-200"></tbody>

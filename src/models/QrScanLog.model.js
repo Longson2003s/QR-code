@@ -7,25 +7,23 @@ const QrScanLogSchema = new mongoose.Schema({
     required: true,
     index: true,
   },
-  target_type: {
-    type: String,
-    enum: ['MASTER_PRESCRIPTION', 'SINGLE_ITEM'],
-    required: true,
-  },
-  prescription_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Prescription',
-    required: true,
-    index: true,
-  },
   medication_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Medication',
-    default: null, // Có giá trị nếu bệnh nhân quét tem dán trên từng lọ thuốc lẻ
+    required: true,
+    index: true,
+  },
+  medication_code: {
+    type: String,
+    default: '',
+  },
+  medication_name: {
+    type: String,
+    default: '',
   },
   device_info: {
     type: String,
-    default: 'Unknown Device',
+    default: 'Mobile Scanner',
   },
   ip_address: {
     type: String,
