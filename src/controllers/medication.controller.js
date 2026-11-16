@@ -390,9 +390,9 @@ exports.renderMedicationPrintQrPage = async (req, res) => {
   try {
     const { idOrCode } = req.params;
     const defaultCopies = Math.min(Math.max(parseInt(req.query.copies, 10) || 12, 1), 200);
-    const defaultSize = ['22x22', '35x22', '50x30'].includes(req.query.size)
+    const defaultSize = ['285x118in', '22x22', '35x22', '50x30'].includes(req.query.size)
       ? req.query.size
-      : '35x22';
+      : '285x118in';
 
     const medication = await findMedicationByIdentifier(idOrCode);
     if (!medication) {
@@ -526,6 +526,34 @@ exports.renderMedicationPrintQrPage = async (req, res) => {
       font-size: 7.5px; font-weight: bold; color: #0369a1; margin-top: 1mm;
     }
 
+    /* 4. Cỡ tem chuẩn máy in nhiệt 2.85 in x 1.18 in (~72.4mm x 30mm) */
+    .box-label.size-285x118in {
+      width: 2.85in; height: 1.18in; padding: 0.06in 0.08in;
+      border: 1px dashed #334155; border-radius: 5px; background: #fff;
+      display: flex; flex-direction: row; align-items: center; gap: 0.08in;
+      page-break-inside: avoid; overflow: hidden;
+    }
+    .box-label.size-285x118in .qr-col { flex-shrink: 0; text-align: center; width: 0.96in; }
+    .box-label.size-285x118in .qr-img { width: 0.90in; height: 0.90in; display: block; margin: 0 auto; }
+    .box-label.size-285x118in .qr-token-txt { font-size: 7.5px; font-family: monospace; color: #334155; margin-top: 1px; }
+    .box-label.size-285x118in .info-col { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
+    .box-label.size-285x118in .label-tag {
+      display: inline-block; background: #0284c7; color: #fff; font-size: 8px;
+      font-weight: bold; padding: 1.5px 5px; border-radius: 2px; margin-bottom: 2px; width: fit-content;
+    }
+    .box-label.size-285x118in .med-name {
+      font-size: 11px; font-weight: bold; color: #000; line-height: 1.2;
+      max-height: 0.36in; overflow: hidden; margin-bottom: 2px;
+    }
+    .box-label.size-285x118in .med-code { font-size: 8.5px; color: #334155; }
+    .box-label.size-285x118in .med-usage {
+      font-size: 8.5px; color: #b91c1c; font-weight: bold; margin-top: 2px;
+      max-height: 0.28in; overflow: hidden; line-height: 1.15;
+    }
+    .box-label.size-285x118in .scan-cta {
+      font-size: 8px; font-weight: bold; color: #0369a1; margin-top: 2px;
+    }
+
     @media print {
       body { background: #fff; padding: 0; margin: 0; }
       .toolbar { display: none !important; }
@@ -533,6 +561,7 @@ exports.renderMedicationPrintQrPage = async (req, res) => {
       .box-label { border: 0.5px solid #94a3b8; }
     }
   </style>
+  <style id="dynamic-print-page"></style>
 </head>
 <body>
   <div class="toolbar">
@@ -554,8 +583,9 @@ exports.renderMedicationPrintQrPage = async (req, res) => {
 
     <div class="toolbar-controls">
       <div class="control-group">
-        <label for="select-size">📐 Kích cỡ tem nhỏ dán hộp:</label>
+        <label for="select-size">📐 Kích cỡ nhãn in ra:</label>
         <select id="select-size" onchange="renderLabels()">
+          <option value="285x118in" ${defaultSize === '285x118in' ? 'selected' : ''}>Chuẩn 2.85 in x 1.18 in (~72.4x30mm - Tem cuộn nhà thuốc)</option>
           <option value="22x22" ${defaultSize === '22x22' ? 'selected' : ''}>Siêu nhỏ 22x22mm (Dán lọ nhỏ / bút tiêm / vỉ thuốc)</option>
           <option value="35x22" ${defaultSize === '35x22' ? 'selected' : ''}>Nhỏ chuẩn 35x22mm (Dán vỏ hộp thuốc tiêu chuẩn)</option>
           <option value="50x30" ${defaultSize === '50x30' ? 'selected' : ''}>Tem vừa 50x30mm (Hộp lớn - Kèm cách dùng/bảo quản)</option>
@@ -594,6 +624,12 @@ exports.renderMedicationPrintQrPage = async (req, res) => {
       const size = document.getElementById('select-size').value;
       const copies = Math.min(Math.max(parseInt(document.getElementById('input-copies').value, 10) || 1, 1), 200);
       const grid = document.getElementById('labels-grid');
+      const dynStyle = document.getElementById('dynamic-print-page');
+      if (dynStyle) {
+        dynStyle.textContent = size === '285x118in'
+          ? '@media print { @page { size: 2.85in 1.18in; margin: 0; } .labels-grid { gap: 0; } .box-label.size-285x118in { border: none; page-break-after: always; break-after: page; } }'
+          : '';
+      }
 
       let html = '';
       for (let i = 0; i < copies; i++) {
@@ -643,9 +679,9 @@ exports.renderMedicationPrintQrPage = async (req, res) => {
  */
 exports.renderBatchPrintQrPage = async (req, res) => {
   try {
-    const defaultSize = ['22x22', '35x22', '50x30'].includes(req.query.size)
+    const defaultSize = ['285x118in', '22x22', '35x22', '50x30'].includes(req.query.size)
       ? req.query.size
-      : '35x22';
+      : '285x118in';
     const itemsParam = (req.query.items || '').trim();
 
     const allMedications = await Medication.find({ is_active: true }).sort({ updated_at: -1 });
@@ -774,6 +810,31 @@ exports.renderBatchPrintQrPage = async (req, res) => {
     }
     .box-label.size-50x30 .scan-cta { font-size: 7.5px; font-weight: bold; color: #0369a1; margin-top: 1mm; }
 
+    .box-label.size-285x118in {
+      width: 2.85in; height: 1.18in; padding: 0.06in 0.08in;
+      border: 1px dashed #334155; border-radius: 5px; background: #fff;
+      display: flex; flex-direction: row; align-items: center; gap: 0.08in;
+      page-break-inside: avoid; overflow: hidden;
+    }
+    .box-label.size-285x118in .qr-col { flex-shrink: 0; text-align: center; width: 0.96in; }
+    .box-label.size-285x118in .qr-img { width: 0.90in; height: 0.90in; display: block; margin: 0 auto; }
+    .box-label.size-285x118in .qr-token-txt { font-size: 7.5px; font-family: monospace; color: #334155; margin-top: 1px; }
+    .box-label.size-285x118in .info-col { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
+    .box-label.size-285x118in .label-tag {
+      display: inline-block; background: #0284c7; color: #fff; font-size: 8px;
+      font-weight: bold; padding: 1.5px 5px; border-radius: 2px; margin-bottom: 2px; width: fit-content;
+    }
+    .box-label.size-285x118in .med-name {
+      font-size: 11px; font-weight: bold; color: #000; line-height: 1.2;
+      max-height: 0.36in; overflow: hidden; margin-bottom: 2px;
+    }
+    .box-label.size-285x118in .med-code { font-size: 8.5px; color: #334155; }
+    .box-label.size-285x118in .med-usage {
+      font-size: 8.5px; color: #b91c1c; font-weight: bold; margin-top: 2px;
+      max-height: 0.28in; overflow: hidden; line-height: 1.15;
+    }
+    .box-label.size-285x118in .scan-cta { font-size: 8px; font-weight: bold; color: #0369a1; margin-top: 2px; }
+
     @media print {
       body { background: #fff; padding: 0; margin: 0; }
       .toolbar { display: none !important; }
@@ -781,6 +842,7 @@ exports.renderBatchPrintQrPage = async (req, res) => {
       .box-label { border: 0.5px solid #94a3b8; }
     }
   </style>
+  <style id="dynamic-print-page"></style>
 </head>
 <body>
   <div class="toolbar">
@@ -792,6 +854,7 @@ exports.renderBatchPrintQrPage = async (req, res) => {
     </div>
     <div style="display:flex; align-items:center; gap:12px;">
       <select id="batch-size" onchange="renderBatch()" style="padding:8px 12px; border-radius:6px; border:1px solid #94a3b8; font-weight:bold;">
+        <option value="285x118in" ${defaultSize === '285x118in' ? 'selected' : ''}>Chuẩn 2.85 in x 1.18 in (~72.4x30mm)</option>
         <option value="22x22" ${defaultSize === '22x22' ? 'selected' : ''}>Cỡ siêu nhỏ 22x22mm</option>
         <option value="35x22" ${defaultSize === '35x22' ? 'selected' : ''}>Cỡ nhỏ chuẩn 35x22mm</option>
         <option value="50x30" ${defaultSize === '50x30' ? 'selected' : ''}>Cỡ vừa 50x30mm</option>
@@ -810,6 +873,12 @@ exports.renderBatchPrintQrPage = async (req, res) => {
     function renderBatch() {
       const size = document.getElementById('batch-size').value;
       const grid = document.getElementById('batch-grid');
+      const dynStyle = document.getElementById('dynamic-print-page');
+      if (dynStyle) {
+        dynStyle.textContent = size === '285x118in'
+          ? '@media print { @page { size: 2.85in 1.18in; margin: 0; } .labels-grid { gap: 0; } .box-label.size-285x118in { border: none; page-break-after: always; break-after: page; } }'
+          : '';
+      }
       let html = '';
 
       BATCH_ITEMS.forEach((med) => {

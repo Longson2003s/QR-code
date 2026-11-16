@@ -361,7 +361,7 @@ function setAllBatchQuantities(qty) {
 
 function openBatchPrintWindow() {
   const cards = Array.from(document.querySelectorAll('.batch-med-card'));
-  const size = document.getElementById('batch-label-size')?.value || '35x22';
+  const size = document.getElementById('batch-label-size')?.value || '285x118in';
 
   const selectedPairs = [];
   cards.forEach((card) => {
