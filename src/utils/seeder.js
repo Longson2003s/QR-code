@@ -76,15 +76,15 @@ const seedOrMigrateData = async () => {
       }
     }
 
-    // 2. Kiểm tra toàn bộ thuốc hiện có trong DB: Giữ nguyên dữ liệu và cấp qr_token cho thuốc nào chưa có
-    const allMeds = await Medication.find({});
-    for (const med of allMeds) {
+    // 2. Kiểm tra trực tiếp trong Collection MongoDB: Cấp qr_token cố định cho thuốc nào chưa có trong DB
+    const rawMeds = await Medication.collection.find({}).toArray();
+    for (const med of rawMeds) {
       if (!med.qr_token) {
-        let token = generateQrToken('m', 4);
+        let token = `m_${med._id.toString().slice(-8)}`;
         if (med.code === 'MED_SYMBICORT_160') token = 'm_symbicort';
         else if (med.code === 'MED_INSULIN_FLEXPEN') token = 'm_insulin';
 
-        await Medication.updateOne({ _id: med._id }, { $set: { qr_token: token } });
+        await Medication.collection.updateOne({ _id: med._id }, { $set: { qr_token: token } });
         updatedTokenCount++;
       }
     }

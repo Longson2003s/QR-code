@@ -75,12 +75,12 @@ const resolveBaseQrUrl = (req) => {
  */
 const ensureMedicationQrToken = async (med) => {
   if (!med.qr_token) {
-    let token = generateQrToken('m', 4);
+    let token = med._id ? `m_${med._id.toString().slice(-8)}` : generateQrToken('m', 4);
     if (med.code === 'MED_SYMBICORT_160') token = 'm_symbicort';
     else if (med.code === 'MED_INSULIN_FLEXPEN') token = 'm_insulin';
 
     med.qr_token = token;
-    await Medication.updateOne({ _id: med._id }, { $set: { qr_token: token } });
+    await Medication.collection.updateOne({ _id: med._id }, { $set: { qr_token: token } });
   }
   return med.qr_token;
 };
@@ -122,7 +122,7 @@ const findMedicationByIdentifier = async (idOrCode) => {
     if (byId) return byId;
   }
 
-  return await Medication.findOne({
+  const found = await Medication.findOne({
     $or: [
       { code: clean.toUpperCase() },
       { code: clean },
@@ -130,6 +130,16 @@ const findMedicationByIdentifier = async (idOrCode) => {
       { qr_token: clean.toLowerCase() },
     ],
   });
+  if (found) return found;
+
+  if (clean.toLowerCase().startsWith('m_')) {
+    const suffix = clean.slice(2).toLowerCase();
+    const allMeds = await Medication.find({});
+    const matched = allMeds.find((m) => m._id.toString().toLowerCase().endsWith(suffix));
+    if (matched) return matched;
+  }
+
+  return null;
 };
 
 /**
@@ -287,6 +297,7 @@ exports.updateMedication = async (req, res) => {
     }
 
     const updatableFields = [
+      'qr_token',
       'name',
       'active_ingredient',
       'dosage_form',

@@ -55,8 +55,8 @@ const MedicationSchema = new mongoose.Schema(
     qr_token: {
       type: String,
       unique: true,
-      index: true,
-      default: () => generateQrToken('m', 4), // Mã token ngắn gọn (VD: m_a1b2c3d4) giúp mã QR in cỡ siêu nhỏ vẫn dễ quét
+      sparse: true,
+      index: true, // Mã token cố định riêng biệt cho từng loại thuốc (VD: m_symbicort, m_5389705c)
     },
     name: {
       type: String,
@@ -116,10 +116,18 @@ const MedicationSchema = new mongoose.Schema(
   }
 );
 
-// Đảm bảo luôn có qr_token và mảng guides được sắp xếp theo step_order tăng dần trước khi lưu
+// Đảm bảo luôn có qr_token cố định và mảng guides được sắp xếp theo step_order tăng dần trước khi lưu
 MedicationSchema.pre('save', function (next) {
   if (!this.qr_token) {
-    this.qr_token = generateQrToken('m', 4);
+    if (this.code === 'MED_SYMBICORT_160') {
+      this.qr_token = 'm_symbicort';
+    } else if (this.code === 'MED_INSULIN_FLEXPEN') {
+      this.qr_token = 'm_insulin';
+    } else if (this._id) {
+      this.qr_token = `m_${this._id.toString().slice(-8)}`;
+    } else {
+      this.qr_token = generateQrToken('m', 4);
+    }
   }
   if (this.guides && this.guides.length > 0) {
     this.guides.sort((a, b) => a.step_order - b.step_order);

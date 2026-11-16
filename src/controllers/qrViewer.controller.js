@@ -38,13 +38,24 @@ const resolveMedicationFromToken = async (token) => {
     if (byId) return byId;
   }
 
-  return await Medication.findOne({
+  const found = await Medication.findOne({
     $or: [
       { qr_token: cleanToken },
       { qr_token: cleanToken.toLowerCase() },
       { code: cleanToken.toUpperCase() },
+      { code: cleanToken },
     ],
   });
+  if (found) return found;
+
+  if (cleanToken.toLowerCase().startsWith('m_')) {
+    const suffix = cleanToken.slice(2).toLowerCase();
+    const allMeds = await Medication.find({});
+    const matched = allMeds.find((m) => m._id.toString().toLowerCase().endsWith(suffix));
+    if (matched) return matched;
+  }
+
+  return null;
 };
 
 /**
