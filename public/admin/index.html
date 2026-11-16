@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Quản Trị Kho Thuốc Hướng Dẫn & In Mã QR Nhỏ Dán Hộp Thuốc</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen">
   <!-- Thanh điều hướng trên cùng -->
@@ -158,12 +159,18 @@
 
         <!-- Cột phải: Danh sách Kho thuốc hướng dẫn kèm Mã QR nhỏ từng loại -->
         <div class="lg:col-span-5 bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
-          <div class="flex items-center justify-between border-b pb-3 mb-4">
+          <div class="flex items-center justify-between flex-wrap gap-2 border-b pb-3 mb-4">
             <div>
               <h2 class="text-lg font-extrabold text-slate-900">📚 Kho Thuốc & Mã QR Từng Loại</h2>
               <p class="text-xs text-slate-500">Bấm "In Mã QR Nhỏ Dán Hộp" ở từng thuốc để in tem dán lên hộp thuốc</p>
             </div>
-            <button onclick="loadMedications()" class="text-xs text-sky-700 font-bold underline">Tải lại</button>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="exportMedicationsExcel()"
+                class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1">
+                📥 Xuất Excel (.xlsx)
+              </button>
+              <button type="button" onclick="loadMedications()" class="text-xs text-sky-700 font-bold underline px-1">Tải lại</button>
+            </div>
           </div>
           <div class="mb-3">
             <input type="text" id="search-med-input" oninput="loadMedications()"

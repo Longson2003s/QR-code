@@ -7,6 +7,9 @@ const uploadMedia = require('../middlewares/uploadMedia.middleware');
 // 1. Thống kê lượt quét QR theo từng loại thuốc trong kho
 router.get('/analytics/scans', medicationController.getMedicationScanAnalytics);
 
+// 1b. Xuất danh sách kho thuốc & mã QR ra file Excel (.xlsx)
+router.get('/export-excel', medicationController.exportMedicationsExcel);
+
 // 2. Trang in hàng loạt tem QR nhỏ cho nhiều loại thuốc trong kho
 router.get('/print-batch', medicationController.renderBatchPrintQrPage);
 

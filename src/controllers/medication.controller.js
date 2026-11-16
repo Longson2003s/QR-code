@@ -4,6 +4,7 @@ const QRCode = require('qrcode');
 const Medication = require('../models/Medication.model');
 const QrScanLog = require('../models/QrScanLog.model');
 const { generateQrToken } = require('../utils/tokenGenerator');
+const { buildMedicationsXlsxBuffer } = require('../utils/excelExporter');
 
 /**
  * Tự động lấy địa chỉ IPv4 mạng LAN/Wi-Fi của máy chủ
@@ -958,5 +959,76 @@ exports.getMedicationScanAnalytics = async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * 10. Xuất danh sách toàn bộ loại thuốc trong kho & Mã QR ra file Excel (.xlsx)
+ */
+exports.exportMedicationsExcel = async (req, res) => {
+  try {
+    const { keyword } = req.query;
+    const filter = {};
+
+    if (keyword && keyword.trim()) {
+      const regex = new RegExp(keyword.trim(), 'i');
+      filter.$or = [
+        { code: regex },
+        { name: regex },
+        { active_ingredient: regex },
+        { qr_token: regex },
+      ];
+    }
+
+    const medications = await Medication.find(filter).sort({ updated_at: -1 });
+    const baseUrl = resolveBaseQrUrl(req);
+
+    const rows = [];
+    for (let i = 0; i < medications.length; i++) {
+      const med = medications[i];
+      const token = await ensureMedicationQrToken(med);
+      const scanUrl = `${baseUrl}/${encodeURIComponent(token)}`;
+      const guidesText = (med.guides || [])
+        .map((g) => `Bước ${g.step_order} (${g.title}): ${g.content_text}`)
+        .join('\n');
+      const updatedTime = med.updated_at
+        ? new Date(med.updated_at).toLocaleString('vi-VN')
+        : '';
+
+      rows.push([
+        i + 1,
+        med.code || '',
+        med.name || '',
+        token || '',
+        scanUrl,
+        med.active_ingredient || '',
+        med.dosage_form || '',
+        med.unit || '',
+        med.standard_usage || '',
+        med.storage_instruction || '',
+        med.general_warning || '',
+        med.hotline_support || '',
+        (med.guides || []).length,
+        guidesText,
+        med.scan_stats?.total_scans || 0,
+        updatedTime,
+      ]);
+    }
+
+    const xlsxBuffer = buildMedicationsXlsxBuffer(rows);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const fileName = `Kho_Thuoc_QR_${dateStr}.xlsx`;
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    return res.status(200).send(xlsxBuffer);
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: `Lỗi xuất file Excel kho thuốc: ${error.message}`,
+    });
   }
 };

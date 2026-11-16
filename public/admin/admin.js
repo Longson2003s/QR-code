@@ -227,6 +227,69 @@ async function loadMedications() {
   }
 }
 
+/**
+ * Xuất danh sách các loại thuốc trong Kho thuốc & Mã QR ra file Excel (.xlsx)
+ */
+async function exportMedicationsExcel() {
+  try {
+    const keyword = document.getElementById('search-med-input')?.value || '';
+    const exportUrl = `/api/medications/export-excel?keyword=${encodeURIComponent(keyword)}`;
+
+    const res = await fetch(exportUrl);
+    if (res.ok) {
+      const blob = await res.blob();
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `Kho_Thuoc_QR_${dateStr}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+      showToast('Đã xuất danh sách Kho thuốc & Mã QR ra file Excel (.xlsx) thành công!');
+      return;
+    }
+
+    // Dự phòng xuất trực tiếp trên trình duyệt qua SheetJS nếu cần
+    if (window.XLSX && cachedMedications.length > 0) {
+      const rows = cachedMedications.map((med, idx) => ({
+        STT: idx + 1,
+        'Mã Thuốc': med.code || '',
+        'Tên Thương Mại (Trên Hộp Thuốc)': med.name || '',
+        'Mã QR Riêng (Token)': med.qr_token || '',
+        'Link Quét Mã QR Dán Hộp Thuốc':
+          med.qr_scan_url || `${window.location.origin}/q/${encodeURIComponent(med.qr_token || med.code)}`,
+        'Hoạt Chất / Hàm Lượng': med.active_ingredient || '',
+        'Dạng Bào Chế / Quy Cách': med.dosage_form || '',
+        'Đơn Vị Tính': med.unit || '',
+        'Cách Dùng Chung': med.standard_usage || '',
+        'Hướng Dẫn Bảo Quản': med.storage_instruction || '',
+        'Cảnh Báo Quan Trọng': med.general_warning || '',
+        'Hotline Tư Vấn': med.hotline_support || '',
+        'Số Bước HDSD': (med.guides || []).length,
+        'Chi Tiết Các Bước Hướng Dẫn Sử Dụng': (med.guides || [])
+          .map((g) => `Bước ${g.step_order} (${g.title}): ${g.content_text}`)
+          .join('\n'),
+        'Lượt Quét QR': med.scan_stats?.total_scans || 0,
+        'Cập Nhật Lúc': med.updated_at ? new Date(med.updated_at).toLocaleString('vi-VN') : '',
+      }));
+
+      const ws = window.XLSX.utils.json_to_sheet(rows);
+      const wb = window.XLSX.utils.book_new();
+      window.XLSX.utils.book_append_sheet(wb, ws, 'Kho Thuoc QR');
+      const dateStr = new Date().toISOString().slice(0, 10);
+      window.XLSX.writeFile(wb, `Kho_Thuoc_QR_${dateStr}.xlsx`);
+      showToast('Đã xuất danh sách Kho thuốc & Mã QR ra file Excel (.xlsx) thành công!');
+      return;
+    }
+
+    throw new Error('Không thể xuất file Excel');
+  } catch (err) {
+    showToast('Lỗi xuất file Excel: ' + err.message, true);
+  }
+}
+
 function editMedicationById(medId) {
   const med = cachedMedications.find((m) => m._id === medId);
   if (!med) return;
