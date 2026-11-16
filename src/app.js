@@ -25,19 +25,23 @@ app.use(express.urlencoded({ extended: true }));
 // 3. Phục vụ file tĩnh (Hình ảnh hướng dẫn & Giao diện Admin)
 app.use('/public', express.static(path.join(__dirname, '../public')));
 
-// API trả về thông tin kết nối LAN & Đường hầm 4G/5G Mạng ngoài
-app.get('/api/network-info', (req, res) => {
-  const port = process.env.PORT || 3000;
-  let lanIp = '10.120.49.40';
+// Hàm tự động lấy IP mạng LAN thực tế của Server
+const getServerLanIp = () => {
   const nets = os.networkInterfaces();
   for (const name of Object.keys(nets)) {
     for (const net of nets[name]) {
       if (net.family === 'IPv4' && !net.internal) {
-        lanIp = net.address;
-        break;
+        return net.address;
       }
     }
   }
+  return '10.120.49.40';
+};
+
+// API trả về thông tin kết nối LAN & Đường hầm 4G/5G Mạng ngoài
+app.get('/api/network-info', (req, res) => {
+  const port = process.env.PORT || 3000;
+  const lanIp = getServerLanIp();
   const lanOrigin = `http://${lanIp}:${port}`;
   const publicOrigin = global.PUBLIC_TUNNEL_ORIGIN || null;
   res.json({
@@ -62,7 +66,8 @@ app.get('/admin', (req, res) => {
 app.get('/', (req, res) => {
   const port = process.env.PORT || 3000;
   const publicOrigin = global.PUBLIC_TUNNEL_ORIGIN;
-  const lanOrigin = `http://10.120.49.40:${port}`;
+  const lanIp = getServerLanIp();
+  const lanOrigin = `http://${lanIp}:${port}`;
 
   res.send(`<!DOCTYPE html>
   <html lang="vi">
@@ -147,9 +152,10 @@ app.get('/', (req, res) => {
 // 6. Khởi động máy chủ & Tự động bật đường hầm Public HTTPS
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', async () => {
+  const lanIp = getServerLanIp();
   console.log('============================================================');
-  console.log(`🚀 Server Kho Thuốc (LAN)         : http://10.120.49.40:${PORT}`);
-  console.log(`💻 Quản Trị Kho Thuốc & In QR     : http://10.120.49.40:${PORT}/admin`);
+  console.log(`🚀 Server Kho Thuốc (LAN)         : http://${lanIp}:${PORT}`);
+  console.log(`💻 Quản Trị Kho Thuốc & In QR     : http://${lanIp}:${PORT}/admin`);
   console.log('⏳ Đang khởi tạo đường hầm Public HTTPS cho mạng ngoài (4G/5G)...');
 
   const publicOrigin = await startPublicTunnel(PORT);
@@ -158,8 +164,8 @@ app.listen(PORT, '0.0.0.0', async () => {
     console.log(`🛠️ Cổng Admin từ Mạng Ngoài       : ${publicOrigin}/admin`);
     console.log(`📱 Link Quét QR Hộp Thuốc Mẫu     : ${publicOrigin}/q/m_symbicort`);
   } else {
-    console.log(`📶 Địa chỉ mạng LAN dự phòng      : ${process.env.BASE_QR_URL || `http://10.120.49.40:${PORT}/q`}`);
+    console.log(`📶 Địa chỉ mạng LAN dự phòng      : ${process.env.BASE_QR_URL || `http://${lanIp}:${PORT}/q`}`);
   }
-  console.log(`🖨️ Trang In Tem QR Nhỏ Mẫu        : http://10.120.49.40:${PORT}/api/medications/MED_SYMBICORT_160/print-qr`);
+  console.log(`🖨️ Trang In Tem QR Nhỏ Mẫu        : http://${lanIp}:${PORT}/api/medications/MED_SYMBICORT_160/print-qr`);
   console.log('============================================================');
 });
