@@ -715,28 +715,26 @@ exports.renderBatchPrintQrPage = async (req, res) => {
       });
     }
 
-    const hasFilter = Object.keys(requestedCounts).length > 0;
     const enrichedList = [];
 
     for (const med of allMedications) {
       const qr = await buildMedicationQrData(med, req);
       const idStr = med._id.toString();
-      const count = hasFilter
-        ? requestedCounts[idStr] || requestedCounts[med.code] || requestedCounts[qr.token] || 0
-        : 4;
+      const count =
+        requestedCounts[idStr] || requestedCounts[med.code] || requestedCounts[qr.token] || 0;
 
-      if (count > 0) {
-        enrichedList.push({
-          code: med.code,
-          qr_token: qr.token,
-          name: med.name,
-          unit: med.unit,
-          standard_usage: med.standard_usage || '',
-          qrDataUrl: qr.qrDataUrl,
-          scanUrl: qr.scanUrl,
-          copies: count,
-        });
-      }
+      enrichedList.push({
+        id: idStr,
+        code: med.code,
+        qr_token: qr.token,
+        name: med.name,
+        active_ingredient: med.active_ingredient || '',
+        unit: med.unit,
+        standard_usage: med.standard_usage || '',
+        qrDataUrl: qr.qrDataUrl,
+        scanUrl: qr.scanUrl,
+        copies: count,
+      });
     }
 
     const batchJson = JSON.stringify(enrichedList);
@@ -857,22 +855,38 @@ exports.renderBatchPrintQrPage = async (req, res) => {
   <style id="dynamic-print-page"></style>
 </head>
 <body>
-  <div class="toolbar">
-    <div>
-      <h2 style="margin:0 0 4px 0; font-size:18px;">🖨️ Bản In Hàng Loạt Tem Mã QR Nhỏ Dán Hộp Thuốc</h2>
-      <div style="font-size:13px; color:#475569;">
-        Đang hiển thị <b>${enrichedList.length} loại thuốc</b> trong kho. Mỗi loại thuốc có mã QR riêng biệt.
+  <div class="toolbar" style="flex-direction:column; align-items:stretch;">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; border-bottom:1px solid #e2e8f0; padding-bottom:12px;">
+      <div>
+        <h2 style="margin:0 0 4px 0; font-size:18px;">🖨️ Màn Hình Tìm Kiếm, Chọn Thuốc & In Tem Mã QR</h2>
+        <div id="toolbar-subtitle" style="font-size:13px; color:#475569;">
+          Mặc định số lượng in của thuốc là <b>0</b>. Tìm kiếm và chọn nhiều loại thuốc bên dưới để in tem.
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+        <select id="batch-size" onchange="renderBatch()" style="padding:8px 12px; border-radius:6px; border:1px solid #94a3b8; font-weight:bold;">
+          <option value="285x118in" ${defaultSize === '285x118in' ? 'selected' : ''}>Chuẩn 2.85 in x 1.18 in (~72.4x30mm)</option>
+          <option value="22x22" ${defaultSize === '22x22' ? 'selected' : ''}>Cỡ siêu nhỏ 22x22mm</option>
+          <option value="35x22" ${defaultSize === '35x22' ? 'selected' : ''}>Cỡ nhỏ chuẩn 35x22mm</option>
+          <option value="50x30" ${defaultSize === '50x30' ? 'selected' : ''}>Cỡ vừa 50x30mm</option>
+        </select>
+        <button class="btn-print" onclick="handlePrintClick()">🖨️ IN CÁC TEM ĐÃ CHỌN (Ctrl + P)</button>
       </div>
     </div>
-    <div style="display:flex; align-items:center; gap:12px;">
-      <select id="batch-size" onchange="renderBatch()" style="padding:8px 12px; border-radius:6px; border:1px solid #94a3b8; font-weight:bold;">
-        <option value="285x118in" ${defaultSize === '285x118in' ? 'selected' : ''}>Chuẩn 2.85 in x 1.18 in (~72.4x30mm)</option>
-        <option value="22x22" ${defaultSize === '22x22' ? 'selected' : ''}>Cỡ siêu nhỏ 22x22mm</option>
-        <option value="35x22" ${defaultSize === '35x22' ? 'selected' : ''}>Cỡ nhỏ chuẩn 35x22mm</option>
-        <option value="50x30" ${defaultSize === '50x30' ? 'selected' : ''}>Cỡ vừa 50x30mm</option>
-      </select>
-      <button class="btn-print" onclick="window.print()">🖨️ IN TẤT CẢ TEM QR (Ctrl + P)</button>
+
+    <!-- Thanh tìm kiếm & chọn nhiều loại thuốc ngay trên màn hình in -->
+    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:4px;">
+      <input type="text" id="picker-search" oninput="renderPickerList()"
+        placeholder="🔍 Tìm thuốc theo tên, mã thuốc, hoạt chất, mã QR để chọn in..."
+        style="flex:1; min-width:260px; padding:8px 12px; border:2px solid #38bdf8; border-radius:8px; font-size:13px; outline:none;" />
+      <button type="button" onclick="resetAllToZero()"
+        style="padding:7px 12px; border-radius:8px; border:1px solid #fca5a5; background:#fef2f2; color:#dc2626; font-weight:bold; font-size:12px; cursor:pointer;">
+        🗑️ Đặt tất cả về 0
+      </button>
     </div>
+
+    <!-- Danh sách thuốc tìm thấy để tích chọn & chỉnh số lượng -->
+    <div id="picker-list" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(270px, 1fr)); gap:8px; max-height:220px; overflow-y:auto; padding:6px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;"></div>
   </div>
 
   <div class="sheet-container">
@@ -881,6 +895,64 @@ exports.renderBatchPrintQrPage = async (req, res) => {
 
   <script>
     const BATCH_ITEMS = ${batchJson};
+
+    function setMedCopies(id, val) {
+      const item = BATCH_ITEMS.find((m) => m.id === id);
+      if (!item) return;
+      item.copies = Math.min(Math.max(parseInt(val, 10) || 0, 0), 500);
+      renderPickerList();
+      renderBatch();
+    }
+
+    function toggleMedCheck(id, checked) {
+      const item = BATCH_ITEMS.find((m) => m.id === id);
+      if (!item) return;
+      item.copies = checked ? (item.copies > 0 ? item.copies : 1) : 0;
+      renderPickerList();
+      renderBatch();
+    }
+
+    function resetAllToZero() {
+      BATCH_ITEMS.forEach((m) => { m.copies = 0; });
+      renderPickerList();
+      renderBatch();
+    }
+
+    function handlePrintClick() {
+      const total = BATCH_ITEMS.reduce((s, m) => s + (m.copies || 0), 0);
+      if (total <= 0) {
+        alert('Vui lòng tìm kiếm và chọn số lượng tem cần in (> 0) cho ít nhất 1 loại thuốc!');
+        return;
+      }
+      window.print();
+    }
+
+    function renderPickerList() {
+      const q = (document.getElementById('picker-search').value || '').trim().toLowerCase();
+      const box = document.getElementById('picker-list');
+      const filtered = BATCH_ITEMS.filter((m) => {
+        if (!q) return true;
+        return [m.code, m.name, m.active_ingredient, m.qr_token].filter(Boolean).join(' ').toLowerCase().includes(q);
+      });
+
+      box.innerHTML = filtered.map((m) => {
+        const sel = m.copies > 0;
+        return \`
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 10px; border-radius:6px; border:\${sel ? '2px solid #10b981' : '1px solid #cbd5e1'}; background:\${sel ? '#ecfdf5' : '#fff'};">
+            <label style="display:flex; align-items:center; gap:6px; flex:1; min-width:0; cursor:pointer; font-size:12px;">
+              <input type="checkbox" \${sel ? 'checked' : ''} onchange="toggleMedCheck('\${m.id}', this.checked)" />
+              <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="\${m.name}"><b>\${m.name}</b> <span style="color:#64748b;">(\${m.code})</span></span>
+            </label>
+            <div style="display:flex; align-items:center; gap:4px;">
+              <button type="button" onclick="setMedCopies('\${m.id}', \${m.copies - 1})" style="width:22px; height:22px; border:1px solid #cbd5e1; background:#fff; border-radius:4px; cursor:pointer; font-weight:bold;">-</button>
+              <input type="number" min="0" max="500" value="\${m.copies}" onchange="setMedCopies('\${m.id}', this.value)"
+                style="width:48px; text-align:center; font-size:12px; font-weight:bold; padding:2px; border:1px solid #94a3b8; border-radius:4px;" />
+              <button type="button" onclick="setMedCopies('\${m.id}', \${m.copies + 1})" style="width:22px; height:22px; border:none; background:#0284c7; color:#fff; border-radius:4px; cursor:pointer; font-weight:bold;">+</button>
+            </div>
+          </div>
+        \`;
+      }).join('');
+    }
 
     function renderBatch() {
       const size = document.getElementById('batch-size').value;
@@ -891,9 +963,20 @@ exports.renderBatchPrintQrPage = async (req, res) => {
           ? '@media print { @page { size: 2.85in 1.18in; margin: 0; } .labels-grid { gap: 0; } .box-label.size-285x118in { border: none; page-break-after: always; break-after: page; } }'
           : '';
       }
+
+      const selectedMeds = BATCH_ITEMS.filter((m) => m.copies > 0);
+      const totalCopies = selectedMeds.reduce((s, m) => s + m.copies, 0);
+      document.getElementById('toolbar-subtitle').innerHTML =
+        'Đã chọn <b>' + selectedMeds.length + ' loại thuốc</b> • Tổng cộng <b>' + totalCopies + ' tem QR</b> sẽ được in ra.';
+
+      if (selectedMeds.length === 0) {
+        grid.innerHTML = '<div style="width:100%; text-align:center; padding:40px 20px; color:#64748b; font-size:14px;">Chưa có loại thuốc nào được chọn (Số lượng mặc định = 0). Hãy tìm kiếm và tích chọn các loại thuốc ở khung phía trên để xem trước và in tem QR.</div>';
+        return;
+      }
+
       let html = '';
 
-      BATCH_ITEMS.forEach((med) => {
+      selectedMeds.forEach((med) => {
         for (let i = 0; i < med.copies; i++) {
           if (size === '22x22') {
             html += \`
@@ -925,6 +1008,7 @@ exports.renderBatchPrintQrPage = async (req, res) => {
       grid.innerHTML = html;
     }
 
+    renderPickerList();
     renderBatch();
   </script>
 </body>

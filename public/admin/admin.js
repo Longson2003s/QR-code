@@ -1,5 +1,8 @@
 // File: public/admin/admin.js
 let cachedMedications = [];
+let allMedicationsCatalog = [];
+const batchSelectedQuantities = {}; // Mặc định số lượng in của mọi loại thuốc là 0
+let showOnlySelectedBatch = false;
 
 /**
  * Hiển thị thông báo nhanh góc phải màn hình
@@ -31,7 +34,7 @@ function switchTab(tabId) {
 
   if (tabId === 'tab-medications') loadMedications();
   if (tabId === 'tab-batch-print') {
-    loadMedications().then(() => renderBatchSelectionGrid());
+    loadAllMedicationsForBatch();
   }
   if (tabId === 'tab-analytics') loadAnalytics();
 }
@@ -388,55 +391,223 @@ document.getElementById('medication-form').addEventListener('submit', async (e) 
    PHẦN 2: IN TEM MÃ QR NHỎ HÀNG LOẠT THEO LOẠI THUỐC (DÁN HỘP THUỐC)
    ========================================================================== */
 
+async function loadAllMedicationsForBatch() {
+  try {
+    const res = await fetch('/api/medications');
+    const result = await res.json();
+    allMedicationsCatalog = result.data || [];
+    renderBatchSelectionGrid();
+  } catch (err) {
+    showToast('Không thể tải danh sách thuốc: ' + err.message, true);
+  }
+}
+
+function getFilteredBatchMedications() {
+  const sourceList = allMedicationsCatalog.length > 0 ? allMedicationsCatalog : cachedMedications;
+  const keyword = (document.getElementById('batch-search-input')?.value || '').trim().toLowerCase();
+
+  return sourceList.filter((med) => {
+    const qty = batchSelectedQuantities[med._id] || 0;
+    if (showOnlySelectedBatch && qty <= 0) return false;
+
+    if (!keyword) return true;
+    const haystack = [
+      med.code,
+      med.name,
+      med.active_ingredient,
+      med.qr_token,
+      med.dosage_form,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(keyword);
+  });
+}
+
+function updateBatchSummaryUI() {
+  const sourceList = allMedicationsCatalog.length > 0 ? allMedicationsCatalog : cachedMedications;
+  const selectedMeds = sourceList.filter((m) => (batchSelectedQuantities[m._id] || 0) > 0);
+  const totalCopies = selectedMeds.reduce((sum, m) => sum + (batchSelectedQuantities[m._id] || 0), 0);
+
+  const medCountEl = document.getElementById('batch-summary-meds');
+  const copiesCountEl = document.getElementById('batch-summary-copies');
+  const btnCountEl = document.getElementById('btn-print-selected-count');
+  const chipsEl = document.getElementById('batch-selected-chips');
+  const toggleBtn = document.getElementById('btn-toggle-only-selected');
+
+  if (medCountEl) medCountEl.textContent = selectedMeds.length;
+  if (copiesCountEl) copiesCountEl.textContent = totalCopies;
+  if (btnCountEl) btnCountEl.textContent = `${selectedMeds.length} thuốc / ${totalCopies} tem`;
+
+  if (toggleBtn) {
+    toggleBtn.textContent = showOnlySelectedBatch
+      ? `📋 Hiện tất cả thuốc trong kho (${sourceList.length})`
+      : `👁️ Chỉ hiện thuốc đã chọn (${selectedMeds.length})`;
+  }
+
+  if (chipsEl) {
+    if (selectedMeds.length === 0) {
+      chipsEl.innerHTML = `<span class="italic text-slate-400">Chưa có loại thuốc nào được chọn (Số lượng mặc định = 0). Hãy tìm kiếm và tích chọn thuốc bên dưới.</span>`;
+    } else {
+      chipsEl.innerHTML = selectedMeds
+        .map((m) => {
+          const q = batchSelectedQuantities[m._id] || 0;
+          return `
+            <span class="inline-flex items-center gap-1.5 bg-white border border-emerald-400 text-emerald-950 px-2.5 py-1 rounded-lg font-semibold shadow-sm">
+              <span>💊 ${m.name}</span>
+              <b class="text-sky-700">(${q} tem)</b>
+              <button type="button" onclick="setSingleBatchQuantity('${m._id}', 0)"
+                title="Bỏ chọn thuốc này" class="text-red-500 hover:text-red-700 font-bold ml-1">✖</button>
+            </span>`;
+        })
+        .join('');
+    }
+  }
+}
+
+function setSingleBatchQuantity(medId, newQty) {
+  const cleanQty = Math.min(Math.max(parseInt(newQty, 10) || 0, 0), 500);
+  if (cleanQty > 0) {
+    batchSelectedQuantities[medId] = cleanQty;
+  } else {
+    delete batchSelectedQuantities[medId];
+  }
+  renderBatchSelectionGrid();
+}
+
+function toggleBatchMedCheckbox(medId, isChecked) {
+  if (isChecked) {
+    if (!batchSelectedQuantities[medId] || batchSelectedQuantities[medId] <= 0) {
+      batchSelectedQuantities[medId] = 1;
+    }
+  } else {
+    delete batchSelectedQuantities[medId];
+  }
+  renderBatchSelectionGrid();
+}
+
+function adjustSingleBatchQuantity(medId, delta) {
+  const current = batchSelectedQuantities[medId] || 0;
+  setSingleBatchQuantity(medId, current + delta);
+}
+
+function toggleShowOnlySelectedBatch() {
+  showOnlySelectedBatch = !showOnlySelectedBatch;
+  renderBatchSelectionGrid();
+}
+
 function renderBatchSelectionGrid() {
   const grid = document.getElementById('batch-medications-grid');
   if (!grid) return;
 
-  if (cachedMedications.length === 0) {
+  updateBatchSummaryUI();
+
+  const sourceList = allMedicationsCatalog.length > 0 ? allMedicationsCatalog : cachedMedications;
+  if (sourceList.length === 0) {
     grid.innerHTML = `<div class="col-span-full text-center text-slate-400 py-8">Kho thuốc trống. Vui lòng thêm thuốc ở Tab 1 trước.</div>`;
     return;
   }
 
-  grid.innerHTML = cachedMedications
-    .map(
-      (med) => `
-    <div class="batch-med-card border border-slate-200 rounded-xl p-4 bg-slate-50/70 flex items-center gap-3.5" data-id="${med._id}">
-      <img src="${med.qr_image_base64}" alt="QR" class="w-16 h-16 bg-white p-1 rounded-lg border border-slate-300 flex-shrink-0" />
-      <div class="flex-1 min-w-0">
-        <div class="text-xs font-mono font-bold text-sky-800 truncate">${med.code} • QR: ${med.qr_token}</div>
-        <div class="font-bold text-sm text-slate-900 truncate" title="${med.name}">${med.name}</div>
-        <div class="mt-2 flex items-center justify-between gap-2">
-          <label class="text-xs font-semibold text-slate-600">Số tem cần in:</label>
-          <input type="number" min="0" max="200" value="4"
-            class="batch-qty-input w-20 border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-extrabold text-center bg-white" />
+  const filteredList = getFilteredBatchMedications();
+  if (filteredList.length === 0) {
+    grid.innerHTML = `<div class="col-span-full text-center text-slate-500 py-8 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+      Không tìm thấy loại thuốc nào phù hợp. Hãy thử từ khóa khác hoặc bấm "Hiện tất cả thuốc trong kho".
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = filteredList
+    .map((med) => {
+      const qty = batchSelectedQuantities[med._id] || 0;
+      const isSelected = qty > 0;
+      return `
+      <div class="batch-med-card rounded-xl p-4 flex items-start gap-3.5 transition ${
+        isSelected
+          ? 'border-2 border-emerald-500 bg-emerald-50/50 shadow-sm'
+          : 'border border-slate-200 bg-slate-50/70 hover:border-sky-300'
+      }" data-id="${med._id}">
+        <div class="flex flex-col items-center gap-1.5 flex-shrink-0">
+          <input type="checkbox" ${isSelected ? 'checked' : ''}
+            onchange="toggleBatchMedCheckbox('${med._id}', this.checked)"
+            class="w-4 h-4 accent-emerald-600 cursor-pointer" title="Tích chọn loại thuốc này để in" />
+          <img src="${med.qr_image_base64}" alt="QR" class="w-14 h-14 bg-white p-1 rounded-lg border border-slate-300" />
         </div>
-      </div>
-    </div>`
-    )
+
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between gap-1">
+            <span class="text-xs font-mono font-bold text-sky-800 truncate">${med.code}</span>
+            ${
+              isSelected
+                ? '<span class="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">ĐÃ CHỌN IN</span>'
+                : '<span class="text-[10px] font-semibold text-slate-400">Chưa chọn (0)</span>'
+            }
+          </div>
+          <div class="font-bold text-sm text-slate-900 truncate mt-0.5" title="${med.name}">${med.name}</div>
+          <div class="text-[11px] text-slate-500 truncate">ĐV: <b>${med.unit}</b> • QR: <span class="font-mono">${med.qr_token}</span></div>
+
+          <div class="mt-2.5 flex items-center justify-between gap-1.5 flex-wrap pt-2 border-t border-slate-200/80">
+            <span class="text-xs font-bold text-slate-700">Số tem in:</span>
+            <div class="flex items-center gap-1">
+              <button type="button" onclick="adjustSingleBatchQuantity('${med._id}', -1)"
+                class="w-7 h-7 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 font-bold text-sm leading-none">-</button>
+              <input type="number" min="0" max="500" value="${qty}"
+                onchange="setSingleBatchQuantity('${med._id}', this.value)"
+                class="batch-qty-input w-16 border ${
+                  isSelected ? 'border-emerald-500 text-emerald-800 bg-white' : 'border-slate-300 text-slate-600 bg-white'
+                } rounded-lg px-2 py-1 text-xs font-extrabold text-center" />
+              <button type="button" onclick="adjustSingleBatchQuantity('${med._id}', 1)"
+                class="w-7 h-7 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-sm leading-none">+</button>
+              <button type="button" onclick="adjustSingleBatchQuantity('${med._id}', 5)"
+                class="px-2 h-7 rounded-lg bg-sky-100 hover:bg-sky-200 text-sky-800 font-bold text-xs leading-none">+5</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    })
     .join('');
 }
 
 function setAllBatchQuantities(qty) {
-  document.querySelectorAll('.batch-qty-input').forEach((input) => {
-    input.value = qty;
+  const cleanQty = Math.min(Math.max(parseInt(qty, 10) || 0, 0), 500);
+  const sourceList = allMedicationsCatalog.length > 0 ? allMedicationsCatalog : cachedMedications;
+  sourceList.forEach((med) => {
+    if (cleanQty > 0) {
+      batchSelectedQuantities[med._id] = cleanQty;
+    } else {
+      delete batchSelectedQuantities[med._id];
+    }
   });
+  if (cleanQty === 0) showOnlySelectedBatch = false;
+  renderBatchSelectionGrid();
+}
+
+function setVisibleBatchQuantities(qty) {
+  const cleanQty = Math.min(Math.max(parseInt(qty, 10) || 0, 0), 500);
+  const visibleList = getFilteredBatchMedications();
+  visibleList.forEach((med) => {
+    if (cleanQty > 0) {
+      batchSelectedQuantities[med._id] = cleanQty;
+    } else {
+      delete batchSelectedQuantities[med._id];
+    }
+  });
+  renderBatchSelectionGrid();
 }
 
 function openBatchPrintWindow() {
-  const cards = Array.from(document.querySelectorAll('.batch-med-card'));
   const size = document.getElementById('batch-label-size')?.value || '285x118in';
 
   const selectedPairs = [];
-  cards.forEach((card) => {
-    const id = card.getAttribute('data-id');
-    const qty = parseInt(card.querySelector('.batch-qty-input')?.value, 10) || 0;
-    if (id && qty > 0) {
+  Object.keys(batchSelectedQuantities).forEach((id) => {
+    const qty = parseInt(batchSelectedQuantities[id], 10) || 0;
+    if (qty > 0) {
       selectedPairs.push(`${id}:${qty}`);
     }
   });
 
   if (selectedPairs.length === 0) {
-    return showToast('Vui lòng nhập số lượng tem cần in (> 0) cho ít nhất 1 loại thuốc!', true);
+    return showToast('Vui lòng tìm kiếm và chọn số lượng tem cần in (> 0) cho ít nhất 1 loại thuốc!', true);
   }
 
   const url = `/api/medications/print-batch?items=${encodeURIComponent(selectedPairs.join('|'))}&size=${encodeURIComponent(size)}`;
