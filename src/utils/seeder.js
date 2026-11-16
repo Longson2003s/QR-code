@@ -16,6 +16,14 @@ const seedOrMigrateData = async () => {
   try {
     await connectDB();
 
+    // Xóa bỏ collection đơn thuốc cũ (prescriptions) vì hệ thống chỉ tập trung vào Kho thuốc & Mã QR từng hộp thuốc
+    try {
+      await Medication.db.dropCollection('prescriptions');
+      console.log('[Database] Đã dọn dẹp collection đơn thuốc cũ (prescriptions).');
+    } catch (_) {
+      // Collection không tồn tại thì bỏ qua
+    }
+
     const backupPath = path.join(__dirname, 'server_medications_backup.json');
     let backupMedications = [];
     if (fs.existsSync(backupPath)) {
